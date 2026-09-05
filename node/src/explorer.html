@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CognitiveChain — eksplorator</title>
+<style>
+  :root {
+    --ground: #f2f1ed; --surface: #fbfaf8; --surface-alt: #e9e7e1;
+    --ink: #1b1f26; --ink-soft: #454b54; --muted: #6b7078;
+    --line: #d6d3cb; --line-strong: #b9b5ab;
+    --accent: #a63d2f; --accent-soft: #f0e0dc;
+    --verify: #2f6e56; --verify-soft: #dfe9e3;
+    --sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, "Liberation Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #14161a; --surface: #1c1f24; --surface-alt: #23272d;
+      --ink: #e8e6e1; --ink-soft: #c3c1bc; --muted: #969ba3;
+      --line: #2e333a; --line-strong: #444a52;
+      --accent: #d9705c; --accent-soft: #33231f;
+      --verify: #6bae8e; --verify-soft: #1b2823;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--ground); color: var(--ink);
+    font-family: var(--sans); font-size: 15px; line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  a:focus-visible, button:focus-visible, input:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 clamp(1rem, 3vw, 2rem); }
+
+  header { border-bottom: 1px solid var(--line); background: var(--surface); }
+  .head-inner {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 1rem;
+    padding: 1.1rem 0;
+  }
+  .brand { font-weight: 650; font-size: 1.05rem; letter-spacing: -0.01em; }
+  .brand span { color: var(--accent); font-family: var(--mono); font-size: 0.8rem; margin-left: 0.4rem; }
+  .chain {
+    font-family: var(--mono); font-size: 0.74rem; color: var(--muted);
+    border: 1px solid var(--line-strong); border-radius: 2px; padding: 0.15rem 0.45rem;
+  }
+  .live { margin-left: auto; display: flex; align-items: center; gap: 0.45rem;
+          font-family: var(--mono); font-size: 0.74rem; color: var(--muted); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--verify); }
+  .dot.off { background: var(--accent); }
+
+  form.search { display: flex; gap: 0.5rem; padding: 0 0 1.1rem; }
+  input[type=search] {
+    flex: 1; font-family: var(--mono); font-size: 0.88rem;
+    padding: 0.55rem 0.7rem; color: var(--ink);
+    background: var(--ground); border: 1px solid var(--line-strong); border-radius: 2px;
+  }
+  button {
+    font-family: var(--sans); font-size: 0.88rem; font-weight: 550;
+    padding: 0.55rem 1.1rem; cursor: pointer; color: var(--ground);
+    background: var(--accent); border: 1px solid var(--accent); border-radius: 2px;
+  }
+  button.ghost { background: transparent; color: var(--ink-soft); border-color: var(--line-strong); }
+
+  main { padding: 1.75rem 0 4rem; }
+  h2 { font-size: 0.76rem; font-family: var(--mono); font-weight: 550;
+       letter-spacing: 0.13em; text-transform: uppercase; color: var(--accent);
+       margin: 0 0 0.9rem; display: flex; align-items: center; gap: 0.7rem; }
+  h2::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+           gap: 1px; background: var(--line); border: 1px solid var(--line); margin-bottom: 2rem; }
+  .stat { background: var(--surface); padding: 0.85rem 1rem; }
+  .stat .k { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.09em;
+             text-transform: uppercase; color: var(--muted); }
+  .stat .v { font-family: var(--mono); font-size: 1.2rem; margin-top: 0.2rem;
+             font-variant-numeric: tabular-nums; word-break: break-all; }
+  .stat .n { font-size: 0.75rem; color: var(--muted); }
+
+  .scroll { overflow-x: auto; border: 1px solid var(--line); background: var(--surface); }
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; min-width: 640px; }
+  th, td { text-align: left; padding: 0.55rem 0.9rem; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.09em;
+       text-transform: uppercase; color: var(--muted); font-weight: 500;
+       background: var(--surface-alt); position: sticky; top: 0; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--surface-alt); }
+  td.mono, th.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  .pill { font-family: var(--mono); font-size: 0.7rem; padding: 0.1rem 0.4rem;
+          border-radius: 2px; border: 1px solid var(--line-strong); color: var(--muted); }
+  .pill.ok { color: var(--verify); border-color: var(--verify); background: var(--verify-soft); }
+  .pill.wait { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+
+  dl.kv { display: grid; grid-template-columns: max-content 1fr; gap: 0.1rem 1.4rem;
+          margin: 0; background: var(--surface); border: 1px solid var(--line); padding: 1rem 1.1rem; }
+  dl.kv dt { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.08em;
+             text-transform: uppercase; color: var(--muted); padding-top: 0.35rem; }
+  dl.kv dd { margin: 0; padding-top: 0.3rem; font-family: var(--mono);
+             font-size: 0.85rem; word-break: break-all; }
+  @media (max-width: 640px) { dl.kv { grid-template-columns: 1fr; } dl.kv dd { padding-bottom: 0.5rem; } }
+
+  .rows { font-family: var(--mono); font-size: 0.78rem; color: var(--ink-soft);
+          word-break: break-all; line-height: 1.7; }
+  .note { color: var(--muted); font-size: 0.83rem; margin-top: 0.7rem; }
+  .empty { padding: 1.5rem 1.1rem; color: var(--muted); background: var(--surface);
+           border: 1px solid var(--line); }
+  .err { padding: 0.9rem 1.1rem; margin-bottom: 1.5rem; color: var(--accent);
+         background: var(--accent-soft); border-left: 3px solid var(--accent); }
+  .back { font-family: var(--mono); font-size: 0.8rem; margin-bottom: 1rem; display: inline-block; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="head-inner">
+      <div class="brand">CognitiveChain<span>COG</span></div>
+      <div class="chain" id="chain-id">…</div>
+      <div class="live"><span class="dot" id="dot"></span><span id="live-text">łączę…</span></div>
+    </div>
+    <form class="search" id="search-form">
+      <input type="search" id="q" placeholder="wysokość bloku, hash bloku albo adres cog…"
+             spellcheck="false" autocomplete="off" aria-label="Szukaj">
+      <button type="submit">Szukaj</button>
+    </form>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="err" id="error" hidden></div>
+
+  <!-- widok główny -->
+  <section id="view-home">
+    <div class="stats" id="stats"></div>
+    <h2>Ostatnie bloki</h2>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th class="num">Wysokość</th>
+            <th>Hash</th>
+            <th>Górnik</th>
+            <th class="num">Trudność</th>
+            <th class="num">Tx</th>
+            <th>Dowód</th>
+            <th class="num">Czas</th>
+          </tr>
+        </thead>
+        <tbody id="blocks"></tbody>
+      </table>
+    </div>
+    <p class="note">
+      Kolumna <b>Dowód</b> pokazuje, czy blok otwiera zobowiązanie poprzedniego górnika.
+      Blok bez otwarcia oznacza, że tamta nagroda przepadła — 45 COG nigdy nie zostało
+      wyemitowane.
+    </p>
+    <div style="margin-top:1rem">
+      <button class="ghost" id="more">Wcześniejsze bloki</button>
+    </div>
+  </section>
+
+  <!-- szczegóły bloku -->
+  <section id="view-block" hidden>
+    <a class="back" href="#">← wróć</a>
+    <h2>Blok <span id="b-height"></span></h2>
+    <dl class="kv" id="b-kv"></dl>
+    <div id="b-extra"></div>
+  </section>
+
+  <!-- szczegóły adresu -->
+  <section id="view-address" hidden>
+    <a class="back" href="#">← wróć</a>
+    <h2>Adres</h2>
+    <dl class="kv" id="a-kv"></dl>
+    <h2 style="margin-top:2rem">Historia</h2>
+    <div id="a-events"></div>
+  </section>
+</main>
+
+<script>
+"use strict";
+
+const RPC = window.location.origin + "/";
+let rpcId = 0;
+
+async function rpc(method, params = {}) {
+  const res = await fetch(RPC, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: ++rpcId, method, params }),
+  });
+  if (!res.ok) throw new Error("węzeł odpowiedział " + res.status);
+  const body = await res.json();
+  if (body.error) throw new Error(body.error.message || "błąd RPC");
+  return body.result;
+}
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const short = (h, n = 10) => h ? h.slice(0, n) + "…" + h.slice(-4) : "—";
+const when = (ts) => {
+  const d = Math.floor(Date.now() / 1000) - ts;
+  if (d < 60) return d + " s temu";
+  if (d < 3600) return Math.floor(d / 60) + " min temu";
+  if (d < 86400) return Math.floor(d / 3600) + " godz. temu";
+  return new Date(ts * 1000).toISOString().slice(0, 10);
+};
+const grouped = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+
+function showError(msg) {
+  const el = $("error");
+  if (!msg) { el.hidden = true; return; }
+  el.textContent = msg;
+  el.hidden = false;
+}
+
+function view(name) {
+  for (const v of ["home", "block", "address"]) {
+    $("view-" + v).hidden = v !== name;
+  }
+}
+
+// ---------- widok główny ----------
+
+let oldestShown = null;
+
+function renderStats(s) {
+  $("chain-id").textContent = s.chain_id;
+  $("stats").innerHTML = [
+    ["Wysokość", grouped(s.height), "bloków w łańcuchu"],
+    ["Zadania", grouped(s.tasks_completed), "zweryfikowanych dowodów"],
+    ["Trudność", grouped(s.difficulty), "prób skrótu na blok"],
+    ["Wyemitowane", s.minted_cog.split(".")[0], "z " + s.max_supply_cog.split(".")[0] + " COG"],
+    ["Konta", grouped(s.accounts), "z niezerowym saldem"],
+    ["Mempool", grouped(s.mempool_size), "transakcji w kolejce"],
+  ].map(([k, v, n]) =>
+    `<div class="stat"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div><div class="n">${esc(n)}</div></div>`
+  ).join("");
+}
+
+function blockRow(b) {
+  const miner = b.solution ? b.solution.miner : null;
+  const proof = b.reveal
+    ? '<span class="pill ok">otwarty</span>'
+    : (b.height === 0 ? '<span class="pill">genesis</span>' : '<span class="pill wait">brak</span>');
+  return `<tr>
+    <td class="num"><a href="#block/${b.height}">${grouped(b.height)}</a></td>
+    <td class="mono"><a href="#block/${esc(b.hash)}">${esc(short(b.hash))}</a></td>
+    <td class="mono">${miner ? `<a href="#address/${esc(miner)}">${esc(short(miner, 12))}</a>` : "—"}</td>
+    <td class="num">${grouped(b.difficulty)}</td>
+    <td class="num">${b.transaction_count}</td>
+    <td>${proof}</td>
+    <td class="num">${esc(when(b.timestamp))}</td>
+  </tr>`;
+}
+
+async function loadHome(reset = true) {
+  const status = await rpc("cog_status");
+  renderStats(status);
+  const from = reset ? undefined : (oldestShown === null ? undefined : oldestShown - 1);
+  if (!reset && from !== undefined && from < 0) return;
+  const res = await rpc("cog_getBlocks", from === undefined ? { count: 20 } : { from_height: from, count: 20 });
+  if (!res.blocks.length) return;
+  oldestShown = res.blocks[res.blocks.length - 1].height;
+  const html = res.blocks.map(blockRow).join("");
+  if (reset) $("blocks").innerHTML = html;
+  else $("blocks").insertAdjacentHTML("beforeend", html);
+  $("more").hidden = oldestShown === 0;
+}
+
+// ---------- blok ----------
+
+async function loadBlock(ref) {
+  const params = /^\d+$/.test(ref) ? { height: Number(ref) } : { hash: ref };
+  const b = await rpc("cog_getBlock", params);
+  $("b-height").textContent = grouped(b.height);
+
+  const rows = [
+    ["hash", b.hash],
+    ["rodzic", b.height > 0 ? `<a href="#block/${esc(b.prev_hash)}">${esc(b.prev_hash)}</a>` : b.prev_hash],
+    ["czas", new Date(b.timestamp * 1000).toISOString().replace("T", " ").slice(0, 19) + " UTC"],
+    ["trudność", grouped(b.difficulty)],
+    ["transakcje", b.transaction_count],
+    ["korzeń stanu", b.state_root],
+  ];
+  if (b.solution) {
+    rows.push(
+      ["górnik", `<a href="#address/${esc(b.solution.miner)}">${esc(b.solution.miner)}</a>`],
+      ["korzeń macierzy", b.solution.matmul_root],
+      ["salt", b.solution.salt],
+      ["nonce", `${b.solution.nonce} <span style="color:var(--muted)">z 65 536 dostępnych</span>`]
+    );
+  }
+  $("b-kv").innerHTML = rows.map(([k, v]) =>
+    `<dt>${esc(k)}</dt><dd>${typeof v === "string" && v.startsWith("<a ") ? v : (String(v).includes("<span") ? v : esc(v))}</dd>`
+  ).join("");
+
+  let extra = "";
+  if (b.reveal) {
+    extra = `<h2 style="margin-top:2rem">Otwarcie zobowiązania</h2>
+      <dl class="kv">
+        <dt>zobowiązanie</dt><dd>${esc(b.reveal.commit_id)}</dd>
+        <dt>otwarte wiersze</dt><dd class="rows">${b.reveal.rows.map(grouped).join(", ")}</dd>
+      </dl>
+      <p class="note">Te ${b.reveal.rows.length} wierszy macierzy zostały wylosowane z hasha
+      poprzedniego bloku i przeliczone przez każdy węzeł niezależnie. Dopiero to
+      uruchomiło wypłatę nagrody za tamten blok.</p>`;
+  } else if (b.height > 0) {
+    extra = `<p class="note" style="margin-top:1.5rem">Ten blok nie otwiera żadnego
+      zobowiązania — nagroda za poprzedni blok nie została wyemitowana.</p>`;
+  }
+  $("b-extra").innerHTML = extra;
+  view("block");
+}
+
+// ---------- adres ----------
+
+async function loadAddress(addr) {
+  const a = await rpc("cog_getAddressHistory", { address: addr, limit: 100 });
+  $("a-kv").innerHTML = [
+    ["adres", a.address],
+    ["saldo", a.balance_cog + " COG"],
+    ["nonce", a.nonce],
+  ].map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
+
+  if (!a.events.length) {
+    $("a-events").innerHTML = `<div class="empty">Brak zdarzeń w przeszukanym zakresie
+      (bloki ${grouped(a.scanned_to_height)}–${grouped(a.tip)}).</div>`;
+  } else {
+    const body = a.events.map((e) => {
+      const label = { block_mined: "wykopany blok", sent: "wysłane", received: "otrzymane" }[e.kind] || e.kind;
+      const amount = e.amount_cog ? e.amount_cog + " COG" : "—";
+      const other = e.counterparty
+        ? `<a href="#address/${esc(e.counterparty)}">${esc(short(e.counterparty, 12))}</a>` : "—";
+      return `<tr>
+        <td class="num"><a href="#block/${e.height}">${grouped(e.height)}</a></td>
+        <td>${esc(label)}</td>
+        <td class="mono">${other}</td>
+        <td class="num">${esc(amount)}</td>
+        <td class="num">${esc(when(e.timestamp))}</td>
+      </tr>`;
+    }).join("");
+    $("a-events").innerHTML = `<div class="scroll"><table>
+      <thead><tr><th class="num">Blok</th><th>Zdarzenie</th><th>Druga strona</th>
+      <th class="num">Kwota</th><th class="num">Czas</th></tr></thead>
+      <tbody>${body}</tbody></table></div>`;
+  }
+
+  const coverage = a.complete
+    ? "Przeszukano cały łańcuch."
+    : `Przeszukano bloki ${grouped(a.scanned_to_height)}–${grouped(a.tip)}. Węzeł nie
+       prowadzi indeksu po adresach, więc starsze zdarzenia nie są tu widoczne —
+       saldo powyżej jest za to zawsze pełne i aktualne.`;
+  $("a-events").insertAdjacentHTML("beforeend", `<p class="note">${esc(coverage)}</p>`);
+  view("address");
+}
+
+// ---------- routing ----------
+
+async function route() {
+  showError("");
+  const hash = window.location.hash.slice(1);
+  try {
+    if (hash.startsWith("block/")) return await loadBlock(hash.slice(6));
+    if (hash.startsWith("address/")) return await loadAddress(hash.slice(8));
+    view("home");
+    oldestShown = null;
+    await loadHome(true);
+  } catch (err) {
+    showError(err.message);
+    view("home");
+  }
+}
+
+$("search-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const q = $("q").value.trim();
+  if (!q) return;
+  if (/^(cog)?[0-9a-fA-F]{40}$/.test(q)) {
+    window.location.hash = "address/" + (q.startsWith("cog") ? q : "cog" + q);
+  } else if (/^\d+$/.test(q) || /^[0-9a-fA-F]{64}$/.test(q)) {
+    window.location.hash = "block/" + q;
+  } else {
+    showError("Nie rozpoznaję tego zapytania. Podaj wysokość bloku, 64-znakowy hash albo adres cog…");
+  }
+});
+
+$("more").addEventListener("click", () => loadHome(false).catch((e) => showError(e.message)));
+window.addEventListener("hashchange", route);
+
+// Odświeżanie na żywo tylko na widoku głównym, żeby nie wyrywać czytającego
+// ze szczegółów bloku.
+async function tick() {
+  try {
+    const s = await rpc("cog_status");
+    $("dot").classList.remove("off");
+    $("live-text").textContent = "blok " + grouped(s.height);
+    if (!window.location.hash) {
+      renderStats(s);
+      const res = await rpc("cog_getBlocks", { count: 20 });
+      if (res.blocks.length) {
+        oldestShown = res.blocks[res.blocks.length - 1].height;
+        $("blocks").innerHTML = res.blocks.map(blockRow).join("");
+      }
+    }
+  } catch (err) {
+    $("dot").classList.add("off");
+    $("live-text").textContent = "brak połączenia";
+  }
+}
+
+route();
+setInterval(tick, 5000);
+</script>
+</body>
+</html>

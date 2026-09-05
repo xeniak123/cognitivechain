@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portfel CognitiveChain</title>
+<style>
+  :root {
+    --ground: #f2f1ed; --surface: #fbfaf8; --surface-alt: #e9e7e1;
+    --ink: #1b1f26; --ink-soft: #454b54; --muted: #6b7078;
+    --line: #d6d3cb; --line-strong: #b9b5ab;
+    --accent: #a63d2f; --accent-soft: #f0e0dc;
+    --verify: #2f6e56; --verify-soft: #dfe9e3;
+    --sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, "Liberation Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #14161a; --surface: #1c1f24; --surface-alt: #23272d;
+      --ink: #e8e6e1; --ink-soft: #c3c1bc; --muted: #969ba3;
+      --line: #2e333a; --line-strong: #444a52;
+      --accent: #d9705c; --accent-soft: #33231f;
+      --verify: #6bae8e; --verify-soft: #1b2823;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--ground); color: var(--ink); font-family: var(--sans);
+    font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 660px; margin: 0 auto; padding: 0 1.25rem 4rem; }
+  a { color: var(--accent); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  header { border-bottom: 1px solid var(--line); background: var(--surface); margin-bottom: 2rem; }
+  .head { max-width: 660px; margin: 0 auto; padding: 1.1rem 1.25rem;
+          display: flex; align-items: center; gap: 0.8rem; }
+  .brand { font-weight: 650; letter-spacing: -0.01em; }
+  .brand span { color: var(--accent); font-family: var(--mono); font-size: 0.78rem; margin-left: 0.35rem; }
+  .node { margin-left: auto; font-family: var(--mono); font-size: 0.72rem; color: var(--muted); }
+
+  h2 { font-size: 0.74rem; font-family: var(--mono); font-weight: 550;
+       letter-spacing: 0.13em; text-transform: uppercase; color: var(--accent);
+       margin: 2.2rem 0 0.9rem; display: flex; align-items: center; gap: 0.7rem; }
+  h2:first-of-type { margin-top: 0; }
+  h2::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  .balance { background: var(--surface); border: 1px solid var(--line); padding: 1.4rem 1.5rem; }
+  .balance .amount { font-family: var(--mono); font-size: clamp(1.8rem, 6vw, 2.6rem);
+                     font-variant-numeric: tabular-nums; letter-spacing: -0.02em; line-height: 1.1; }
+  .balance .amount small { font-size: 0.42em; color: var(--muted); margin-left: 0.4rem; letter-spacing: 0; }
+  .addr { font-family: var(--mono); font-size: 0.78rem; color: var(--ink-soft);
+          margin-top: 0.9rem; word-break: break-all; }
+  .addr-row { display: flex; align-items: flex-start; gap: 0.6rem; margin-top: 0.9rem; }
+  .addr-row .addr { margin-top: 0; flex: 1; }
+
+  form { background: var(--surface); border: 1px solid var(--line); padding: 1.3rem 1.5rem; }
+  label { display: block; font-family: var(--mono); font-size: 0.7rem;
+          letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted);
+          margin-bottom: 0.35rem; }
+  input {
+    width: 100%; font-family: var(--mono); font-size: 0.9rem; color: var(--ink);
+    padding: 0.6rem 0.7rem; background: var(--ground);
+    border: 1px solid var(--line-strong); border-radius: 2px;
+  }
+  input:disabled { opacity: 0.55; }
+  .field + .field { margin-top: 1rem; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+  @media (max-width: 520px) { .row2 { grid-template-columns: 1fr; } }
+
+  button {
+    font-family: var(--sans); font-size: 0.9rem; font-weight: 550;
+    padding: 0.62rem 1.3rem; cursor: pointer; border-radius: 2px;
+    color: var(--ground); background: var(--accent); border: 1px solid var(--accent);
+  }
+  button.ghost { background: transparent; color: var(--ink-soft); border-color: var(--line-strong); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .actions { display: flex; gap: 0.6rem; align-items: center; margin-top: 1.3rem; }
+
+  .msg { padding: 0.85rem 1rem; margin-top: 1.2rem; font-size: 0.88rem; border-left: 3px solid; }
+  .msg.err { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
+  .msg.ok { color: var(--verify); background: var(--verify-soft); border-color: var(--verify); }
+  .msg .hash { font-family: var(--mono); font-size: 0.78rem; word-break: break-all; display: block; margin-top: 0.3rem; }
+
+  .confirm { background: var(--accent-soft); border-left: 3px solid var(--accent);
+             padding: 1rem 1.2rem; margin-top: 1.2rem; }
+  .confirm dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.15rem 1.2rem; margin: 0 0 1rem; }
+  .confirm dt { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.08em;
+                text-transform: uppercase; color: var(--muted); }
+  .confirm dd { margin: 0; font-family: var(--mono); font-size: 0.85rem; word-break: break-all; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .scroll { overflow-x: auto; border: 1px solid var(--line); background: var(--surface); }
+  th, td { text-align: left; padding: 0.5rem 0.85rem; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.09em;
+       text-transform: uppercase; color: var(--muted); font-weight: 500; background: var(--surface-alt); }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  td.mono { font-family: var(--mono); }
+  .empty { padding: 1.3rem 1rem; color: var(--muted); background: var(--surface); border: 1px solid var(--line); }
+  .note { color: var(--muted); font-size: 0.82rem; margin-top: 0.8rem; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="head">
+    <div class="brand">Portfel<span>COG</span></div>
+    <div class="node" id="node">…</div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2>Saldo</h2>
+  <div class="balance">
+    <div class="amount"><span id="balance">—</span><small>COG</small></div>
+    <div class="addr-row">
+      <div class="addr" id="address">…</div>
+      <button class="ghost" id="copy" type="button">Kopiuj</button>
+    </div>
+    <div class="note" id="nonce-note"></div>
+  </div>
+
+  <h2>Wyślij</h2>
+  <form id="send-form" autocomplete="off">
+    <div class="field">
+      <label for="to">Adres odbiorcy</label>
+      <input id="to" name="to" placeholder="cog…" spellcheck="false" required>
+    </div>
+    <div class="row2">
+      <div>
+        <label for="amount">Kwota (COG)</label>
+        <input id="amount" name="amount" inputmode="decimal" placeholder="0.00000000" required>
+      </div>
+      <div>
+        <label for="fee">Opłata (COG)</label>
+        <input id="fee" name="fee" inputmode="decimal" value="0.001" required>
+      </div>
+    </div>
+    <div class="actions">
+      <button type="submit" id="submit">Sprawdź i wyślij</button>
+      <span class="note" style="margin:0">Klucz prywatny nigdy nie opuszcza tego komputera.</span>
+    </div>
+
+    <div class="confirm" id="confirm" hidden>
+      <dl>
+        <dt>do</dt><dd id="c-to"></dd>
+        <dt>kwota</dt><dd id="c-amount"></dd>
+        <dt>opłata</dt><dd id="c-fee"></dd>
+        <dt>razem</dt><dd id="c-total"></dd>
+      </dl>
+      <div class="actions" style="margin-top:0">
+        <button type="button" id="confirm-yes">Potwierdzam, wyślij</button>
+        <button type="button" class="ghost" id="confirm-no">Anuluj</button>
+      </div>
+      <div class="note">Przelewu nie da się cofnąć. Sprawdź adres znak po znaku.</div>
+    </div>
+
+    <div class="msg" id="msg" hidden></div>
+  </form>
+
+  <h2>Historia</h2>
+  <div id="history"><div class="empty">Wczytuję…</div></div>
+
+</div>
+
+<script>
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const short = (h) => h ? h.slice(0, 12) + "…" + h.slice(-6) : "—";
+const grouped = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+const when = (ts) => {
+  const d = Math.floor(Date.now() / 1000) - ts;
+  if (d < 60) return d + " s temu";
+  if (d < 3600) return Math.floor(d / 60) + " min temu";
+  if (d < 86400) return Math.floor(d / 3600) + " godz. temu";
+  return new Date(ts * 1000).toISOString().slice(0, 10);
+};
+
+function message(kind, text, hash) {
+  const el = $("msg");
+  el.className = "msg " + kind;
+  el.innerHTML = esc(text) + (hash ? `<span class="hash">${esc(hash)}</span>` : "");
+  el.hidden = false;
+}
+function clearMessage() { $("msg").hidden = true; }
+
+async function api(path, options) {
+  const res = await fetch(path, options);
+  const body = await res.json().catch(() => ({ error: "węzeł zwrócił nieczytelną odpowiedź" }));
+  if (!res.ok) throw new Error(body.error || ("błąd " + res.status));
+  return body;
+}
+
+let myAddress = "";
+
+async function refresh() {
+  try {
+    const s = await api("/api/state");
+    myAddress = s.address;
+    $("node").textContent = s.node;
+    $("address").textContent = s.address;
+    $("balance").textContent = grouped(s.balance_cog.split(".")[0]) + "." + s.balance_cog.split(".")[1];
+    $("nonce-note").textContent = "nonce " + s.nonce + " · wysokość łańcucha " + grouped(s.tip);
+
+    if (!s.events.length) {
+      $("history").innerHTML = `<div class="empty">Brak zdarzeń w przeszukanym zakresie.</div>`;
+      return;
+    }
+    const rows = s.events.map((e) => {
+      const label = { block_mined: "wykopany blok", sent: "wysłane", received: "otrzymane" }[e.kind] || e.kind;
+      const sign = e.kind === "sent" ? "−" : (e.kind === "received" ? "+" : "");
+      return `<tr>
+        <td class="num">${grouped(e.height)}</td>
+        <td>${esc(label)}</td>
+        <td class="mono">${e.counterparty ? esc(short(e.counterparty)) : "—"}</td>
+        <td class="num">${e.amount_cog ? esc(sign + e.amount_cog) : "—"}</td>
+        <td class="num">${esc(when(e.timestamp))}</td>
+      </tr>`;
+    }).join("");
+    $("history").innerHTML = `<div class="scroll"><table>
+      <thead><tr><th>Blok</th><th>Zdarzenie</th><th>Druga strona</th>
+      <th class="num">COG</th><th class="num">Czas</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>` +
+      (s.complete ? "" : `<p class="note">Historia obejmuje bloki ${grouped(s.scanned_to_height)}–${grouped(s.tip)}; saldo jest zawsze pełne.</p>`);
+  } catch (err) {
+    $("node").textContent = "brak połączenia";
+    $("history").innerHTML = `<div class="empty">Nie mogę pobrać danych: ${esc(err.message)}</div>`;
+  }
+}
+
+$("copy").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(myAddress);
+    $("copy").textContent = "Skopiowano";
+    setTimeout(() => ($("copy").textContent = "Kopiuj"), 1500);
+  } catch {
+    // Schowek bywa zablokowany; zaznaczenie tekstu zawsze działa.
+    const range = document.createRange();
+    range.selectNodeContents($("address"));
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+});
+
+// Wysłanie jest dwuetapowe: formularz najpierw pokazuje, co dokładnie zostanie
+// podpisane. Przelewu nie da się cofnąć, więc jedno kliknięcie to za mało.
+$("send-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  clearMessage();
+  const to = $("to").value.trim();
+  const amount = $("amount").value.trim();
+  const fee = $("fee").value.trim();
+
+  if (!/^(cog)?[0-9a-fA-F]{40}$/.test(to)) {
+    return message("err", "Adres odbiorcy musi mieć postać cog + 40 znaków hex.");
+  }
+  const a = Number(amount), f = Number(fee);
+  if (!(a > 0)) return message("err", "Kwota musi być większa od zera.");
+  if (!(f >= 0)) return message("err", "Opłata nie może być ujemna.");
+
+  $("c-to").textContent = to.startsWith("cog") ? to : "cog" + to;
+  $("c-amount").textContent = amount + " COG";
+  $("c-fee").textContent = fee + " COG";
+  $("c-total").textContent = (a + f).toFixed(8) + " COG";
+  $("confirm").hidden = false;
+  $("submit").disabled = true;
+});
+
+$("confirm-no").addEventListener("click", () => {
+  $("confirm").hidden = true;
+  $("submit").disabled = false;
+});
+
+$("confirm-yes").addEventListener("click", async () => {
+  const btn = $("confirm-yes");
+  btn.disabled = true;
+  btn.textContent = "Wysyłam…";
+  try {
+    const result = await api("/api/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to: $("to").value.trim(),
+        amount: $("amount").value.trim(),
+        fee: $("fee").value.trim(),
+      }),
+    });
+    message("ok",
+      `Wysłano ${result.amount_cog} COG (opłata ${result.fee_cog}). Transakcja czeka na włączenie do bloku.`,
+      result.tx_hash);
+    $("to").value = "";
+    $("amount").value = "";
+    refresh();
+  } catch (err) {
+    message("err", err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Potwierdzam, wyślij";
+    $("confirm").hidden = true;
+    $("submit").disabled = false;
+  }
+});
+
+refresh();
+setInterval(refresh, 8000);
+</script>
+</body>
+</html>

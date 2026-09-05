@@ -32,6 +32,26 @@ sieć?** [LAUNCH.md](LAUNCH.md) — runbook startu ·
 **Pełne wdrożenie:** [DEPLOYMENT.md](DEPLOYMENT.md) ·
 **Protokół:** [docs/PROTOCOL.md](docs/PROTOCOL.md)
 
+## Eksplorator i portfel
+
+Węzeł serwuje **eksplorator bloków** pod `GET /` na tym samym porcie co RPC —
+`http://<IP_WĘZŁA>:26657`. Lista bloków, szczegóły z otwartymi wierszami macierzy,
+historia adresu, wyszukiwarka. Strona jest wkompilowana w binarkę, więc działa na
+serwerze bez dostępu do internetu.
+
+**Portfel graficzny** uruchamiasz lokalnie:
+
+```bash
+cog-node wallet-ui --key wallet.json --rpc <IP_WĘZŁA>:26657
+# otwórz http://127.0.0.1:26658
+```
+
+Podpisywanie odbywa się w procesie Rusta, tą samą biblioteką ed25519, którą
+weryfikuje węzeł. Przeglądarka nigdy nie dostaje klucza prywatnego — wysyła
+`{to, amount, fee}` i dostaje hash transakcji. Serwer odmawia nasłuchu poza
+loopbackiem bez jawnego `--allow-remote`, bo kto sięgnie do tego portu, ten
+wyda Twoje monety.
+
 ## Kopanie w dwóch krokach
 
 Portfel — pobierz `cog-node` z
@@ -206,6 +226,8 @@ i skrypt z `docs/PROTOCOL.md` dla tych samych danych wejściowych wypisują ten 
 | `cog_getBalance` | saldo i nonce konta |
 | `cog_sendTransaction` | rozgłoszenie podpisanego przelewu |
 | `cog_getBlock` | blok po `height` albo `hash` |
+| `cog_getBlocks` | ostatnie bloki, od najnowszego |
+| `cog_getAddressHistory` | zdarzenia adresu: wykopane bloki i przelewy |
 | `cog_getSupply` | wyemitowana i pozostała podaż, bieżąca nagroda |
 
 ```bash

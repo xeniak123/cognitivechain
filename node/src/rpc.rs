@@ -8,7 +8,8 @@ use crate::pouw;
 use crate::types::{format_cog, Address, Block, Hash, Reveal, RowProof, Solution, Transaction};
 use anyhow::{anyhow, bail, Context, Result};
 use axum::extract::State as AxumState;
-use axum::routing::{get, post};
+use axum::response::Html;
+use axum::routing::get;
 use axum::{Json, Router};
 use parking_lot::Mutex;
 use serde_json::{json, Value};
@@ -24,8 +25,11 @@ pub struct RpcContext {
 }
 
 pub async fn serve(ctx: RpcContext, addr: SocketAddr) -> Result<()> {
+    // GET / serves the block explorer, POST / is the JSON-RPC endpoint. The
+    // page is compiled into the binary so a node needs no static file hosting
+    // and works on a machine with no outbound internet access.
     let app = Router::new()
-        .route("/", post(handle_rpc))
+        .route("/", get(explorer).post(handle_rpc))
         .route("/health", get(|| async { "ok" }))
         .with_state(ctx);
     let listener = tokio::net::TcpListener::bind(addr)
@@ -34,6 +38,11 @@ pub async fn serve(ctx: RpcContext, addr: SocketAddr) -> Result<()> {
     tracing::info!("JSON-RPC listening on http://{addr}");
     axum::serve(listener, app).await?;
     Ok(())
+}
+
+/// The block explorer, embedded at compile time.
+async fn explorer() -> Html<&'static str> {
+    Html(include_str!("explorer.html"))
 }
 
 async fn handle_rpc(AxumState(ctx): AxumState<RpcContext>, Json(req): Json<Value>) -> Json<Value> {
@@ -314,6 +323,114 @@ fn dispatch(ctx: &RpcContext, method: &str, params: &Value) -> Result<Value> {
                 Some(b) => Ok(block_to_json(&b)),
                 None => Err(anyhow!("block not found")),
             }
+        }
+
+        // Recent blocks, newest first. Backs the explorer's block list.
+        "cog_getBlocks" => {
+            let chain = ctx.chain.lock();
+            let tip = chain.tip.header.height;
+            let count = params
+                .get("count")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(20)
+                .clamp(1, 100);
+            let from = params
+                .get("from_height")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(tip)
+                .min(tip);
+
+            let mut blocks = Vec::new();
+            let mut height = from as i64;
+            while blocks.len() < count as usize && height >= 0 {
+                if let Some(block) = chain.block_at_height(height as u64)? {
+                    blocks.push(block_to_json(&block));
+                }
+                height -= 1;
+            }
+            Ok(json!({ "tip": tip, "blocks": blocks }))
+        }
+
+        // Everything the canonical chain says about one address.
+        //
+        // This walks blocks backwards rather than reading an index, because the
+        // node keeps no per-address index. `scanned_to_height` in the response
+        // says how far back the answer actually covers, so a caller is never
+        // misled into reading a truncated history as a complete one.
+        "cog_getAddressHistory" => {
+            let address = addr_param(params, "address")?;
+            let depth = params
+                .get("scan_depth")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(2_000)
+                .clamp(1, 100_000);
+            let limit = params
+                .get("limit")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(50)
+                .clamp(1, 500) as usize;
+
+            let chain = ctx.chain.lock();
+            let tip = chain.tip.header.height;
+            let stop = tip.saturating_sub(depth);
+
+            let mut events = Vec::new();
+            let mut height = tip as i64;
+            while height as u64 >= stop && height >= 0 && events.len() < limit {
+                let block = match chain.block_at_height(height as u64)? {
+                    Some(b) => b,
+                    None => {
+                        height -= 1;
+                        continue;
+                    }
+                };
+                let block_hash = hex::encode(block.hash());
+
+                if let Some(sol) = &block.solution {
+                    if sol.miner == address {
+                        events.push(json!({
+                            "kind": "block_mined",
+                            "height": block.header.height,
+                            "timestamp": block.header.timestamp,
+                            "block_hash": block_hash,
+                        }));
+                    }
+                }
+                for tx in &block.transactions {
+                    let from = tx.from();
+                    if from != address && tx.to != address {
+                        continue;
+                    }
+                    events.push(json!({
+                        "kind": if from == address { "sent" } else { "received" },
+                        "height": block.header.height,
+                        "timestamp": block.header.timestamp,
+                        "block_hash": block_hash,
+                        "tx_hash": hex::encode(tx.hash()),
+                        "counterparty": if from == address {
+                            tx.to.to_hex()
+                        } else {
+                            from.to_hex()
+                        },
+                        "amount_acog": tx.amount.to_string(),
+                        "amount_cog": format_cog(tx.amount),
+                        "fee_acog": tx.fee.to_string(),
+                    }));
+                }
+                height -= 1;
+            }
+
+            let balance = chain.state.balance(&address);
+            Ok(json!({
+                "address": address.to_hex(),
+                "balance_acog": balance.to_string(),
+                "balance_cog": format_cog(balance),
+                "nonce": chain.state.nonce(&address),
+                "tip": tip,
+                "scanned_to_height": (height + 1).max(0),
+                "complete": stop == 0,
+                "events": events,
+            }))
         }
 
         "cog_getSupply" => {

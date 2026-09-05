@@ -326,6 +326,38 @@ pub fn meets_difficulty(hash: &Hash, difficulty: u64) -> bool {
     carry == 0
 }
 
+/// Parse a human-readable COG amount ("12.5") into acog.
+pub fn parse_cog(input: &str) -> Result<u64, String> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return Err("amount is empty".into());
+    }
+    let (whole, frac) = match trimmed.split_once('.') {
+        Some((w, f)) => (w, f),
+        None => (trimmed, ""),
+    };
+    if frac.len() > DECIMALS as usize {
+        return Err(format!("COG has at most {DECIMALS} decimal places"));
+    }
+    if !whole.chars().all(|c| c.is_ascii_digit()) || !frac.chars().all(|c| c.is_ascii_digit()) {
+        return Err(format!("{trimmed:?} is not a number"));
+    }
+    let whole: u64 = if whole.is_empty() {
+        0
+    } else {
+        whole
+            .parse()
+            .map_err(|_| format!("{trimmed:?} is too large"))?
+    };
+    let frac: u64 = format!("{:0<8}", frac)
+        .parse()
+        .map_err(|_| format!("{trimmed:?} is not a number"))?;
+    whole
+        .checked_mul(COG)
+        .and_then(|v| v.checked_add(frac))
+        .ok_or_else(|| format!("{trimmed:?} overflows the supply"))
+}
+
 /// Format an amount in acog as a human-readable COG string.
 pub fn format_cog(amount: u64) -> String {
     let whole = amount / COG;
@@ -356,5 +388,33 @@ mod tests {
     #[test]
     fn format_amounts() {
         assert_eq!(format_cog(150_000_000), "1.50000000");
+    }
+
+    #[test]
+    fn parse_amounts() {
+        assert_eq!(parse_cog("1.5").unwrap(), 150_000_000);
+        assert_eq!(parse_cog("12").unwrap(), 1_200_000_000);
+        assert_eq!(parse_cog("0.00000001").unwrap(), 1);
+        assert_eq!(parse_cog(" 3.25 ").unwrap(), 325_000_000);
+        assert!(
+            parse_cog("1.000000001").is_err(),
+            "9 decimals must be rejected"
+        );
+        assert!(parse_cog("abc").is_err());
+        assert!(parse_cog("").is_err());
+        assert!(parse_cog("-5").is_err());
+        assert!(parse_cog("99999999999999999999").is_err());
+    }
+
+    #[test]
+    fn parse_and_format_round_trip() {
+        for raw in [
+            "0.00000001",
+            "1.00000000",
+            "1234.56780000",
+            "999999999.99999999",
+        ] {
+            assert_eq!(format_cog(parse_cog(raw).unwrap()), raw);
+        }
     }
 }

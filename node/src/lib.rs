@@ -9,8 +9,10 @@
 //! * [`store`]  - durable block storage
 //! * [`rpc`]    - the JSON-RPC surface used by miners and wallets
 //! * [`p2p`]    - node-to-node gossip
+//! * [`wallet_ui`] - local graphical wallet, signing in-process
 
 pub mod chain;
+pub mod client;
 pub mod crypto;
 pub mod genesis;
 pub mod mempool;
@@ -20,3 +22,4 @@ pub mod rpc;
 pub mod state;
 pub mod store;
 pub mod types;
+pub mod wallet_ui;

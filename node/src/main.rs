@@ -3,6 +3,7 @@
 use anyhow::{anyhow, bail, Context, Result};
 use clap::{Parser, Subcommand};
 use cog_node::chain::{self, Chain};
+use cog_node::client::rpc_call;
 use cog_node::crypto;
 use cog_node::genesis;
 use cog_node::p2p;
@@ -10,15 +11,15 @@ use cog_node::pouw;
 use cog_node::rpc;
 use cog_node::state;
 use cog_node::types;
+use cog_node::wallet_ui;
 use crypto::Keypair;
 use genesis::{Allocation, GenesisConfig, Params};
 use parking_lot::Mutex;
-use serde_json::{json, Value};
+use serde_json::json;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use types::{format_cog, Address, COG};
+use types::{format_cog, parse_cog, Address};
 
 #[derive(Parser)]
 #[command(
@@ -103,6 +104,20 @@ enum Command {
         #[arg(long, default_value_t = 30)]
         block_time: u64,
     },
+    /// Open the graphical wallet in a browser. Signing happens locally; the
+    /// page never receives the private key.
+    WalletUi {
+        #[arg(long, default_value = "wallet.json")]
+        key: PathBuf,
+        #[arg(long, default_value = "127.0.0.1:26658")]
+        bind: SocketAddr,
+        #[arg(long, default_value = "127.0.0.1:26657")]
+        rpc: String,
+        /// Allow binding to a non-loopback address. Anything that can reach the
+        /// port can spend the wallet, so put authentication in front of it.
+        #[arg(long)]
+        allow_remote: bool,
+    },
     /// Validate a genesis file and print the derived constants.
     InspectGenesis {
         #[arg(long, default_value = "genesis.json")]
@@ -110,87 +125,6 @@ enum Command {
     },
     /// Run one full useful-work task locally and verify it end to end.
     Selftest,
-}
-
-fn parse_cog(input: &str) -> Result<u64> {
-    let trimmed = input.trim();
-    let (whole, frac) = match trimmed.split_once('.') {
-        Some((w, f)) => (w, f),
-        None => (trimmed, ""),
-    };
-    if frac.len() > 8 {
-        bail!("COG amounts have at most 8 decimal places, got {trimmed:?}");
-    }
-    let whole: u64 = if whole.is_empty() {
-        0
-    } else {
-        whole
-            .parse()
-            .with_context(|| format!("bad amount {trimmed:?}"))?
-    };
-    let padded = format!("{:0<8}", frac);
-    let frac: u64 = if padded.is_empty() {
-        0
-    } else {
-        padded
-            .parse()
-            .with_context(|| format!("bad amount {trimmed:?}"))?
-    };
-    whole
-        .checked_mul(COG)
-        .and_then(|v| v.checked_add(frac))
-        .ok_or_else(|| anyhow!("amount {trimmed:?} overflows u64"))
-}
-
-/// Minimal JSON-RPC client over plain HTTP/1.1, so the CLI needs no HTTP crate.
-async fn rpc_call(endpoint: &str, method: &str, params: Value) -> Result<Value> {
-    let host = endpoint
-        .trim_start_matches("http://")
-        .trim_end_matches('/')
-        .to_string();
-    let body = serde_json::to_string(&json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": method,
-        "params": params,
-    }))?;
-    let request = format!(
-        "POST / HTTP/1.1\r\nHost: {host}\r\nContent-Type: application/json\r\n\
-         Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
-        body.len()
-    );
-
-    let mut stream = tokio::net::TcpStream::connect(&host)
-        .await
-        .with_context(|| format!("cannot reach node RPC at {host}"))?;
-    stream.write_all(request.as_bytes()).await?;
-    stream.flush().await?;
-
-    let mut response = Vec::new();
-    stream.read_to_end(&mut response).await?;
-    let text = String::from_utf8_lossy(&response).to_string();
-    let split = text
-        .find("\r\n\r\n")
-        .ok_or_else(|| anyhow!("malformed HTTP response from node"))?;
-    let body_text = &text[split + 4..];
-    // Slice out the JSON object itself, which makes the client tolerant of a
-    // chunked transfer encoding without needing to decode the framing.
-    let start = body_text
-        .find('{')
-        .ok_or_else(|| anyhow!("node response contains no JSON body"))?;
-    let end = body_text
-        .rfind('}')
-        .ok_or_else(|| anyhow!("node response contains a truncated JSON body"))?;
-    let payload = &body_text[start..=end];
-    let parsed: Value = serde_json::from_str(payload)
-        .with_context(|| format!("node returned a non-JSON body: {payload}"))?;
-    if let Some(err) = parsed.get("error") {
-        bail!("node error: {}", err);
-    }
-    parsed
-        .get("result")
-        .cloned()
-        .ok_or_else(|| anyhow!("response has no result field"))
 }
 
 fn load_key(path: &PathBuf) -> Result<Keypair> {
@@ -446,8 +380,8 @@ async fn cmd_send(
 ) -> Result<()> {
     let kp = load_key(&key)?;
     let to = Address::parse(&to).map_err(|e| anyhow!("recipient: {e}"))?;
-    let amount = parse_cog(&amount)?;
-    let fee = parse_cog(&fee)?;
+    let amount = parse_cog(&amount).map_err(|e| anyhow!(e))?;
+    let fee = parse_cog(&fee).map_err(|e| anyhow!(e))?;
 
     let info = rpc_call(&rpc, "cog_getBalance", json!({"address": kp.address})).await?;
     let nonce = info
@@ -552,6 +486,25 @@ async fn main() -> Result<()> {
             initial_difficulty,
             block_time,
         ),
+
+        Command::WalletUi {
+            key,
+            bind,
+            rpc,
+            allow_remote,
+        } => {
+            let keypair = load_key(&key)?;
+            println!("portfel: {}", keypair.address);
+            wallet_ui::serve(
+                wallet_ui::WalletContext {
+                    keypair: Arc::new(keypair),
+                    node: rpc,
+                },
+                bind,
+                allow_remote,
+            )
+            .await
+        }
 
         Command::InspectGenesis { genesis } => cmd_inspect_genesis(genesis),
 
