@@ -31,7 +31,9 @@ zweryfikować ~20× taniej, niż kosztowało wyprodukowanie dowodu.
 sieć?** [LAUNCH.md](LAUNCH.md) — runbook startu ·
 **Pełne wdrożenie:** [DEPLOYMENT.md](DEPLOYMENT.md) ·
 **Protokół:** [docs/PROTOCOL.md](docs/PROTOCOL.md) ·
-**Pula:** [docs/POOL.md](docs/POOL.md)
+**Pula:** [docs/POOL.md](docs/POOL.md) ·
+**Bezpieczeństwo:** [docs/SECURITY.md](docs/SECURITY.md) ·
+**Integracja giełdowa:** [docs/EXCHANGE.md](docs/EXCHANGE.md)
 
 ## Eksplorator i portfel
 
@@ -257,6 +259,13 @@ Uczciwy opis tego, czym ten system **nie** jest:
 * **P2P jest minimalne.** Statyczna lista peerów, bez odkrywania węzłów,
   bez szyfrowania transportu, bez systemu reputacji. Do startu wystarcza;
   do sieci publicznej dużej skali warto dołożyć te elementy.
+* **Kod nie przeszedł audytu zewnętrznego.** Przeszedł przegląd wewnętrzny,
+  który znalazł dwa realne błędy — jeden zatrzymywał sieć na stałe przy bloku 60,
+  drugi pozwalał powtarzać transakcje między sieciami. Oba naprawione i pokryte
+  testami. Pełna lista ustaleń, problemów otwartych i zakres dla audytora:
+  [docs/SECURITY.md](docs/SECURITY.md).
+* **Pula wymaga zaufania do operatora.** Trzyma środki górników na jednym kluczu
+  do momentu wypłaty. To ograniczenie modelu, nie implementacji.
 
 ---
 
