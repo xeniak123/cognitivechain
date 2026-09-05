@@ -191,11 +191,20 @@ Co `retarget_interval` bloków (domyślnie 60), licząc wstecz po **tej konkretn
 gałęzi**:
 
 ```
-actual   = max(1, timestamp(rodzic) − timestamp(rodzic − interval))
-expected = interval × target_block_time_secs
+steps    = interval − 1
+actual   = max(1, timestamp(rodzic) − timestamp(rodzic − steps))
+expected = steps × target_block_time_secs
 next     = clamp(difficulty × expected / actual,  difficulty/4,  difficulty×4)
 next     = max(next, 1)
 ```
+
+> **`steps = interval − 1`, nie `interval`.** Okno to `interval` bloków na
+> wysokościach `[h−interval, h−1]`, więc pierwszy z nich leży `interval − 1`
+> kroków od rodzica i tyle właśnie odstępów czasowych mierzymy. Cofnięcie się
+> o pełne `interval` kroków trafia jeden blok poniżej genesis przy **pierwszym**
+> retargecie i zatrzymuje sieć na tej wysokości na zawsze. Jeśli okno jest
+> niekompletne (gałąź w trakcie synchronizacji), zachowujemy trudność rodzica —
+> węzeł, który nie umie policzyć retargetu, nie może przestać produkować bloków.
 
 Wybór łańcucha: największa suma `difficulty` (skumulowana praca). Przy remisie
 wygrywa łańcuch przyjęty wcześniej.
