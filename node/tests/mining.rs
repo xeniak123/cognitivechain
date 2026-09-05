@@ -302,6 +302,65 @@ fn a_nonce_outside_the_bounded_space_is_rejected() {
     assert!(chain.submit_solution(bad).is_err());
 }
 
+/// Regression test for a chain-halting bug.
+///
+/// The retarget window is the `interval` blocks below the retarget height, so
+/// its first block sits `interval - 1` steps back from the parent. Walking a
+/// full `interval` steps runs off the end of the chain at the *first* retarget
+/// and every node then refuses to produce or accept another block - the network
+/// stops permanently at that height. This mines straight through two retarget
+/// boundaries to prove it does not.
+#[test]
+fn the_chain_survives_its_retarget_boundaries() {
+    let miner = Address([0x49; 20]);
+    let dir = TempDir::new("retarget");
+    let mut cfg = test_genesis(miner);
+    // A short window keeps the test fast; the boundary logic is identical.
+    cfg.params.retarget_interval = 4;
+    cfg.params.target_block_time_secs = 10;
+    let mut chain = Chain::open(&dir.0, cfg).unwrap();
+
+    let mut pending: Option<([u8; 32], Vec<Vec<u16>>, Vec<[u8; 32]>)> = None;
+
+    for expected_height in 1..=9u64 {
+        let difficulty = chain
+            .expected_difficulty(&chain.tip)
+            .unwrap_or_else(|e| panic!("difficulty unavailable at height {expected_height}: {e}"));
+
+        let prev = chain.tip_hash;
+        let (sol, rows, leaves) = solve(prev, miner, difficulty);
+        let seed = pouw::task_seed(&prev, &miner, sol.salt);
+        let commit = pouw::commit_id(&seed, &sol.matmul_root, sol.nonce);
+
+        // Open the previous block's commitment so rewards actually settle.
+        if let Some((id, prev_rows, prev_leaves)) = pending.take() {
+            chain
+                .submit_reveal(build_reveal(id, prev, &prev_rows, &prev_leaves))
+                .expect("reveal must be accepted");
+        }
+
+        chain
+            .submit_solution(sol)
+            .unwrap_or_else(|e| panic!("block {expected_height} rejected: {e}"));
+        assert_eq!(chain.tip.header.height, expected_height);
+        pending = Some((commit, rows, leaves));
+    }
+
+    assert_eq!(chain.tip.header.height, 9);
+    assert!(
+        chain.state.tasks_completed >= 8,
+        "rewards must keep settling across retargets, got {}",
+        chain.state.tasks_completed
+    );
+    // Block timestamps only ever advance one second at a time here, which is far
+    // faster than the 10 s target, so difficulty must have been pushed upward.
+    assert!(
+        chain.tip.header.difficulty > 1,
+        "difficulty should have retargeted upward, still {}",
+        chain.tip.header.difficulty
+    );
+}
+
 #[test]
 fn the_supply_cap_holds_across_the_whole_emission_schedule() {
     let cfg = test_genesis(Address([0x48; 20]));

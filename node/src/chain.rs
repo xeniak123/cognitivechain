@@ -191,14 +191,19 @@ impl Chain {
             return Ok(parent.header.difficulty);
         }
 
-        // Walk back `interval` blocks along this specific branch.
+        // The window is the `interval` blocks at heights [height-interval, height-1],
+        // so the first of them sits `interval - 1` steps back from the parent.
+        // Walking `interval` steps instead would run off the end of the chain at
+        // the very first retarget and halt the network there.
+        let steps = interval - 1;
         let mut cursor = parent.clone();
-        for _ in 0..interval {
-            let prev = self
-                .store
-                .get_block(&cursor.header.prev_hash)?
-                .context("retarget window reaches beyond stored history")?;
-            cursor = prev;
+        for _ in 0..steps {
+            cursor = match self.store.get_block(&cursor.header.prev_hash)? {
+                Some(block) => block,
+                // An incomplete window (a pruned or still-syncing branch) is not
+                // a reason to stop producing blocks; keep the parent difficulty.
+                None => return Ok(parent.header.difficulty),
+            };
         }
         let first = cursor;
 
@@ -207,7 +212,8 @@ impl Chain {
             .timestamp
             .saturating_sub(first.header.timestamp)
             .max(1);
-        let expected = interval * self.params.target_block_time_secs;
+        // `steps` gaps were measured, so compare against `steps` target intervals.
+        let expected = steps * self.params.target_block_time_secs;
 
         // difficulty scales inversely with elapsed time, clamped to 4x per window.
         let old = parent.header.difficulty as u128;
