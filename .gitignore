@@ -1,0 +1,11 @@
+target/
+data/
+data2/
+.devrun/
+*.log
+wallet.json
+founders.json
+ecosystem.json
+liquidity.json
+miner.json
+__pycache__/

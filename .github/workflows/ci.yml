@@ -1,0 +1,176 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  node:
+    name: node (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: node
+
+      - name: Formatting
+        working-directory: node
+        run: cargo fmt --check
+
+      - name: Lints
+        working-directory: node
+        run: cargo clippy --all-targets --release -- -D warnings
+
+      - name: Tests
+        working-directory: node
+        run: cargo test --release
+
+      - name: Proof-of-Useful-Work selftest
+        working-directory: node
+        run: cargo run --release -- selftest
+
+  miner:
+    name: miner (${{ matrix.os }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install
+        working-directory: miner
+        run: python -m pip install -r requirements.txt
+
+      - name: Device selftest and benchmark
+        working-directory: miner
+        run: >
+          python -m cog_miner
+          --wallet cog0000000000000000000000000000000000000001
+          --pool 127.0.0.1:26657
+          --benchmark
+
+  interop:
+    name: Rust <-> Python protocol agreement
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: node
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install miner deps
+        working-directory: miner
+        run: python -m pip install -r requirements.txt
+
+      # Both implementations must derive the same task seed and the same Merkle
+      # root from the same inputs, or a miner's proofs would be unverifiable.
+      - name: Compare protocol test vectors
+        run: |
+          cd node
+          cargo run --release -- selftest | tee ../rust.txt
+          cd ../miner
+          python - <<'EOF' | tee ../python.txt
+          from cog_miner import protocol as pr
+          from cog_miner.compute import detect_device, Engine
+          seed = pr.task_seed(b'\x22' * 32, b'\x11' * 20, 7)
+          engine = Engine(detect_device())
+          c = engine.matmul(pr.gen_matrix_a(seed), pr.gen_matrix_b(seed))
+          print("task seed  :", seed.hex())
+          print("matmul root:", pr.merkle_root(pr.build_leaves(c)).hex())
+          EOF
+          cd ..
+          grep -q 3614b0a51492d64b22b390ffe27a0a3988ddcb595f83d181b26e1047f14be87e rust.txt
+          grep -q 3614b0a51492d64b22b390ffe27a0a3988ddcb595f83d181b26e1047f14be87e python.txt
+          grep -q bd3ee4836b4dc78c5a8d3141542a25998ded48ca10f33a68ffae6478a69415e7 rust.txt
+          grep -q bd3ee4836b4dc78c5a8d3141542a25998ded48ca10f33a68ffae6478a69415e7 python.txt
+          echo "Rust and Python agree on the protocol test vectors."
+
+  devnet:
+    name: End-to-end devnet (node + miner mine real blocks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: node
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build node
+        working-directory: node
+        run: cargo build --release
+
+      - name: Install miner deps
+        working-directory: miner
+        run: python -m pip install -r requirements.txt
+
+      - name: Mine a devnet and assert the rewards are correct
+        run: |
+          set -euo pipefail
+          BIN=node/target/release/cog-node
+          $BIN keygen --out miner.json
+          ADDR=$($BIN address --key miner.json)
+          $BIN genesis-template --out devnet.json \
+            --chain-id cognitivechain-ci \
+            --founders  "$ADDR" \
+            --ecosystem cog0000000000000000000000000000000000000002 \
+            --liquidity cog0000000000000000000000000000000000000003 \
+            --initial-difficulty 200000 --block-time 5
+          $BIN run --genesis devnet.json --data-dir ./ci-data \
+            --rpc 127.0.0.1:26657 --p2p 127.0.0.1:26656 &
+          NODE_PID=$!
+          sleep 3
+          cd miner
+          timeout 60 python -m cog_miner --wallet "$ADDR" --pool 127.0.0.1:26657 --quiet || true
+          cd ..
+          python - "$ADDR" <<'EOF'
+          import json, sys, urllib.request
+          def call(method, params=None):
+              req = urllib.request.Request(
+                  "http://127.0.0.1:26657",
+                  data=json.dumps({"jsonrpc": "2.0", "id": 1,
+                                   "method": method, "params": params or {}}).encode(),
+                  headers={"Content-Type": "application/json"})
+              return json.loads(urllib.request.urlopen(req).read())["result"]
+          status = call("cog_status")
+          balance = call("cog_getBalance", {"address": sys.argv[1]})
+          tasks = status["tasks_completed"]
+          print(json.dumps(status, indent=2))
+          assert status["height"] > 1, "no blocks were mined"
+          assert tasks > 0, "no useful-work task was verified"
+          premine = 5_000_000_000_000_000
+          expected = premine + tasks * 4_500_000_000
+          assert int(balance["balance_acog"]) == expected, (
+              f"reward accounting is wrong: {balance['balance_acog']} != {expected}")
+          print(f"OK: {tasks} verified tasks paid exactly {tasks * 45} COG")
+          EOF
+          kill $NODE_PID

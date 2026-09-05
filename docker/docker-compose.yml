@@ -1,0 +1,47 @@
+# CognitiveChain mainnet node.
+#
+#   cd cognitivechain
+#   cp genesis/genesis.mainnet.json docker/config/genesis.json
+#   docker compose -f docker/docker-compose.yml up -d --build
+#
+# Add more validators by copying the `node` service and pointing each one at the
+# others with repeated `--peer host:26656` arguments.
+
+services:
+  node:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.node
+    image: cognitivechain/node:1.0.0
+    container_name: cog-node
+    restart: unless-stopped
+    command:
+      - run
+      - --genesis=/config/genesis.json
+      - --data-dir=/data
+      - --rpc=0.0.0.0:26657
+      - --p2p=0.0.0.0:26656
+      # Repeat for every seed you want this node to dial:
+      # - --peer=seed1.example.com:26656
+      # - --peer=seed2.example.com:26656
+    environment:
+      # trace | debug | info | warn | error
+      RUST_LOG: info
+    ports:
+      # JSON-RPC: miners connect here. Expose publicly only if you want an
+      # open mining endpoint; otherwise bind to 127.0.0.1 and front it with TLS.
+      - "26657:26657"
+      # P2P gossip: must be reachable by other validators.
+      - "26656:26656"
+    volumes:
+      - cog-data:/data
+      - ./config:/config:ro
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+volumes:
+  cog-data:

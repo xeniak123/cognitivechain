@@ -1,0 +1,8 @@
+# Core runtime. Both wheels are prebuilt for Windows and Linux.
+numpy>=1.24
+blake3>=0.4
+
+# GPU support is OPTIONAL and intentionally not pinned here: install the build
+# that matches your CUDA runtime from https://pytorch.org/get-started/locally/
+# The miner detects torch at import time and falls back to NumPy without it.
+#   pip install torch --index-url https://download.pytorch.org/whl/cu124

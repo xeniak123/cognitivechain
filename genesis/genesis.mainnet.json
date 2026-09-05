@@ -1,0 +1,41 @@
+{
+  "_readme": [
+    "CognitiveChain mainnet genesis. EVERY node on the network must use a",
+    "byte-identical copy of this file: its hash is part of the P2P handshake.",
+    "BEFORE LAUNCH replace the three placeholder allocation addresses with real",
+    "ones from `cog-node keygen`, and set genesis_time to the launch timestamp",
+    "(unix seconds). After the first block is produced the file can never change.",
+    "Amounts are in acog; 1 COG = 100000000 acog. Max supply 1000000000 COG:",
+    "100000000 premined (10%) + 900000000 emitted to miners (90%)."
+  ],
+  "chain_id": "cognitivechain-1",
+  "genesis_time": 1893456000,
+  "params": {
+    "max_supply_acog": "100000000000000000",
+    "initial_block_reward_acog": "4500000000",
+    "halving_interval_tasks": 10000000,
+    "target_block_time_secs": 30,
+    "retarget_interval": 60,
+    "initial_difficulty": 5000000,
+    "min_tx_fee_acog": "10000",
+    "max_block_txs": 4096,
+    "max_future_drift_secs": 120
+  },
+  "allocations": [
+    {
+      "label": "founders",
+      "address": "cog0000000000000000000000000000000000000001",
+      "amount_acog": "5000000000000000"
+    },
+    {
+      "label": "ecosystem",
+      "address": "cog0000000000000000000000000000000000000002",
+      "amount_acog": "3000000000000000"
+    },
+    {
+      "label": "liquidity",
+      "address": "cog0000000000000000000000000000000000000003",
+      "amount_acog": "2000000000000000"
+    }
+  ]
+}
