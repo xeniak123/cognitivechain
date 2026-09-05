@@ -27,8 +27,39 @@ zweryfikować ~20× taniej, niż kosztowało wyprodukowanie dowodu.
 | Czas bloku | 30 s (retarget co 60 bloków) |
 | Konta | model kontowy, podpisy ed25519, adresy `cog<40 hex>` |
 
-**Start:** [DEPLOYMENT.md](DEPLOYMENT.md) — od pustego VPS do kopiących
-użytkowników. **Protokół:** [docs/PROTOCOL.md](docs/PROTOCOL.md).
+**Chcesz kopać?** [Jak zacząć](#kopanie-w-dwóch-krokach) · **Chcesz uruchomić
+sieć?** [LAUNCH.md](LAUNCH.md) — runbook startu ·
+**Pełne wdrożenie:** [DEPLOYMENT.md](DEPLOYMENT.md) ·
+**Protokół:** [docs/PROTOCOL.md](docs/PROTOCOL.md)
+
+## Kopanie w dwóch krokach
+
+Portfel — pobierz `cog-node` z
+[Releases](https://github.com/xeniak123/cognitivechain/releases) i uruchom
+`cog-node keygen --out wallet.json`. Zapisz adres, zrób kopię pliku.
+
+Koparka:
+
+```bash
+# Linux
+curl -fsSL https://raw.githubusercontent.com/xeniak123/cognitivechain/main/scripts/mine.sh   | bash -s -- --wallet cog<TWÓJ_ADRES> --pool <IP_WĘZŁA>
+```
+
+```powershell
+# Windows
+irm https://raw.githubusercontent.com/xeniak123/cognitivechain/main/scripts/mine.ps1 -OutFile mine.ps1
+.\mine.ps1 -Wallet cog<TWÓJ_ADRES> -Pool <IP_WĘZŁA>
+```
+
+Skrypty weryfikują sumę SHA-256 pobranej binarki i odmawiają uruchomienia pliku,
+który się nie zgadza. Masz kartę NVIDIA? Doinstaluj
+[PyTorch z CUDA](https://pytorch.org/get-started/locally/) — koparka wykryje ją sama.
+
+Własny węzeł na VPS, jedną komendą:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xeniak123/cognitivechain/main/scripts/install-node.sh | sudo bash
+```
 
 ---
 
@@ -48,6 +79,7 @@ miner/          koparka (Python + CUDA przez PyTorch)
   cog_miner/compute.py    backendy: cuda-fast, cuda-fp64, cpu
 genesis/        genesis.mainnet.json
 docker/         Dockerfile + docker-compose
+scripts/        install-node.sh (węzeł na VPS), mine.sh i mine.ps1 (koparka)
 ```
 
 ## Szybki start (lokalny devnet)
