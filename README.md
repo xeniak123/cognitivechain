@@ -30,7 +30,8 @@ zweryfikować ~20× taniej, niż kosztowało wyprodukowanie dowodu.
 **Chcesz kopać?** [Jak zacząć](#kopanie-w-dwóch-krokach) · **Chcesz uruchomić
 sieć?** [LAUNCH.md](LAUNCH.md) — runbook startu ·
 **Pełne wdrożenie:** [DEPLOYMENT.md](DEPLOYMENT.md) ·
-**Protokół:** [docs/PROTOCOL.md](docs/PROTOCOL.md)
+**Protokół:** [docs/PROTOCOL.md](docs/PROTOCOL.md) ·
+**Pula:** [docs/POOL.md](docs/POOL.md)
 
 ## Eksplorator i portfel
 
@@ -86,7 +87,7 @@ curl -fsSL https://raw.githubusercontent.com/xeniak123/cognitivechain/main/scrip
 ## Struktura repozytorium
 
 ```
-node/           węzeł walidujący (Rust)
+node/           węzeł, portfel i pula (Rust)
   src/types.rs    formaty wire i preimage'e hashy (krytyczne dla konsensusu)
   src/pouw.rs     zadanie PoUW, zobowiązanie, wyzwanie, dowody Merkle
   src/state.rs    maszyna stanu, emisja, weryfikacja otwarcia zobowiązań
@@ -99,6 +100,7 @@ miner/          koparka (Python + CUDA przez PyTorch)
   cog_miner/compute.py    backendy: cuda-fast, cuda-fp64, cpu
 genesis/        genesis.mainnet.json
 docker/         Dockerfile + docker-compose
+  src/pool.rs     pula: weryfikacja udziałów, PPLNS, wypłaty
 scripts/        install-node.sh (węzeł na VPS), mine.sh i mine.ps1 (koparka)
 ```
 

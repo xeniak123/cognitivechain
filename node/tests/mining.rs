@@ -57,11 +57,11 @@ fn test_genesis(miner: Address) -> GenesisConfig {
 
 /// One honest task: returns the solution plus the full product matrix so the
 /// caller can build (or corrupt) the reveal.
-fn solve(
-    prev_hash: [u8; 32],
-    miner: Address,
-    difficulty: u64,
-) -> (Solution, Vec<Vec<u16>>, Vec<[u8; 32]>) {
+/// A solved task: the winning solution, the product matrix rows, and the
+/// Merkle leaves over them.
+type SolvedTask = (Solution, Vec<Vec<u16>>, Vec<[u8; 32]>);
+
+fn solve(prev_hash: [u8; 32], miner: Address, difficulty: u64) -> SolvedTask {
     for salt in 0u64..1024 {
         let seed = pouw::task_seed(&prev_hash, &miner, salt);
         let a = pouw::gen_matrix_a(&seed);
@@ -320,7 +320,9 @@ fn the_chain_survives_its_retarget_boundaries() {
     cfg.params.target_block_time_secs = 10;
     let mut chain = Chain::open(&dir.0, cfg).unwrap();
 
-    let mut pending: Option<([u8; 32], Vec<Vec<u16>>, Vec<[u8; 32]>)> = None;
+    // commitment id plus the rows and leaves needed to open it next block
+    type Unopened = ([u8; 32], Vec<Vec<u16>>, Vec<[u8; 32]>);
+    let mut pending: Option<Unopened> = None;
 
     for expected_height in 1..=9u64 {
         let difficulty = chain

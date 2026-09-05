@@ -21,10 +21,12 @@ jobs:
           - os: ubuntu-latest
             label: linux-x64
             node_bin: cog-node
+            pool_bin: cog-pool
             miner_bin: cog-miner
           - os: windows-latest
             label: windows-x64
             node_bin: cog-node.exe
+            pool_bin: cog-pool.exe
             miner_bin: cog-miner.exe
     steps:
       - uses: actions/checkout@v4
@@ -59,17 +61,12 @@ jobs:
         run: |
           mkdir -p dist
           cp "node/target/release/${{ matrix.node_bin }}" dist/
+          cp "node/target/release/${{ matrix.pool_bin }}" dist/
           cp "miner/dist/${{ matrix.miner_bin }}" dist/
           cp genesis/genesis.mainnet.json dist/genesis.json
           cd dist
-          if command -v sha256sum >/dev/null; then
-            sha256sum * > SHA256SUMS-${{ matrix.label }}.txt
-          else
-            certutil -hashfile "${{ matrix.node_bin }}" SHA256 \
-              > SHA256SUMS-${{ matrix.label }}.txt
-            certutil -hashfile "${{ matrix.miner_bin }}" SHA256 \
-              >> SHA256SUMS-${{ matrix.label }}.txt
-          fi
+          # Git Bash ships sha256sum on both runners, so one format for both.
+          sha256sum * > SHA256SUMS-${{ matrix.label }}.txt
           cat SHA256SUMS-${{ matrix.label }}.txt
 
       - uses: actions/upload-artifact@v4

@@ -29,6 +29,8 @@ class Stats:
     endpoint: str = ""
     wallet: str = ""
     chain_id: str = "?"
+    # Address the tasks are seeded with; differs from `wallet` when pooled.
+    mining_for: str = ""
 
     height: int = 0
     difficulty: int = 0
@@ -38,6 +40,7 @@ class Stats:
     tasks: int = 0
     hashes: int = 0
     blocks_found: int = 0
+    shares: int = 0
     reveals_sent: int = 0
     rejected: int = 0
 
@@ -85,11 +88,17 @@ class Stats:
             f"  device     {self.device}  {self.device_detail}",
             f"  pool       {self.endpoint}  [{status}]",
             f"  wallet     {self.wallet}",
+            *( [f"  pula       zadania pod {self.mining_for}"] if self.mining_for else [] ),
             f"  chain      {self.chain_id}   height {self.height}   difficulty {self.difficulty}",
             "",
             f"  useful work   {self.tflops:8.3f} TOPS      {self.tasks_per_second:6.2f} tasks/s",
             f"  nonce search  {self.hashrate / 1000:8.1f} kH/s     {self.tasks} tasks total",
             f"  blocks found  {self.blocks_found:8d}          proofs revealed {self.reveals_sent}",
+            *(
+                [f"  pool shares   {self.shares:8d}          zaakceptowanych udzialow"]
+                if self.mining_for
+                else []
+            ),
             f"  balance       {self.balance_cog} COG",
             f"  uptime        {human_time(time.time() - self.started)}",
         ]

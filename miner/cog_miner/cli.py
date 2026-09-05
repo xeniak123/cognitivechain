@@ -204,9 +204,22 @@ def mine_forever(args: argparse.Namespace) -> int:
         difficulty = int(work["difficulty"])
         max_nonce = int(work.get("max_nonce", protocol.MAX_NONCE))
 
+        # A pool asks miners to compute under *its* address, because the task
+        # seed is what ends up in the block. Our own wallet then identifies
+        # whose share it is, not whose task it is.
+        mining_address = work.get("mining_address") or args.wallet
+        mining_bytes = (
+            miner_bytes
+            if mining_address == args.wallet
+            else protocol.address_bytes(mining_address)
+        )
+        if mining_address != args.wallet and stats.mining_for != mining_address:
+            stats.mining_for = mining_address
+            display.log(f"pula liczy zadania pod adresem {mining_address}")
+
         # 2. A fresh random salt gives this miner a task nobody else is running.
         salt = random.getrandbits(64)
-        seed = protocol.task_seed(prev_hash, miner_bytes, salt)
+        seed = protocol.task_seed(prev_hash, mining_bytes, salt)
 
         # 3. The useful work itself.
         a = protocol.gen_matrix_a(seed)
@@ -234,15 +247,24 @@ def mine_forever(args: argparse.Namespace) -> int:
                 response = None
 
             if response and response.get("status") == "accepted":
-                stats.blocks_found += 1
-                display.log(
-                    f"BLOCK FOUND at height {response['height']} "
-                    f"({response['block_hash'][:16]}...)"
-                )
                 cache[commit] = (matrix, levels)
                 cache_order.append(commit)
                 while len(cache_order) > CACHE_SIZE:
                     cache.pop(cache_order.pop(0), None)
+
+                # A pool answers with share bookkeeping, a node with a block.
+                if "block_candidate" in response:
+                    stats.shares += 1
+                    if response.get("block_accepted"):
+                        stats.blocks_found += 1
+                        display.log("BLOCK FOUND - pula przekazala go do wezla")
+                else:
+                    stats.blocks_found += 1
+                    block_hash = response.get("block_hash", "")
+                    display.log(
+                        f"BLOCK FOUND at height {response.get('height', '?')} "
+                        f"({block_hash[:16]}...)"
+                    )
             elif response is not None:
                 stats.rejected += 1
                 display.log(f"solution not accepted: {response.get('detail', 'stale')}")

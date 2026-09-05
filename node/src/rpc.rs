@@ -110,6 +110,13 @@ fn block_to_json(block: &Block) -> Value {
         "state_root": hex::encode(block.header.state_root),
         "reveal_root": hex::encode(block.header.reveal_root),
         "transaction_count": block.transactions.len(),
+        // A pool needs this to split a block's fees among its miners.
+        "fee_total_acog": block
+            .transactions
+            .iter()
+            .map(|t| t.fee)
+            .sum::<u64>()
+            .to_string(),
         "solution": block.solution.as_ref().map(|s| json!({
             "miner": s.miner.to_hex(),
             "salt": s.salt,
