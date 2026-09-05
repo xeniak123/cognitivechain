@@ -88,6 +88,20 @@ impl Chain {
             store.flush()?;
         }
 
+        // A genesis timestamp in the future is a legitimate way to schedule a
+        // launch: block 1 must carry a timestamp greater than genesis and no
+        // greater than now, so no block can exist until that moment arrives.
+        // It is also an easy thing to leave in a template by accident, so say so.
+        let now = now_secs();
+        if cfg.genesis_time > now {
+            let wait = cfg.genesis_time - now;
+            tracing::warn!(
+                "genesis_time ({}) is {} days in the future: this chain accepts no blocks                  until then. If that is not intentional, set genesis_time in the genesis                  file to the real launch time.",
+                cfg.genesis_time,
+                wait / 86_400
+            );
+        }
+
         let tip_hash = store.tip()?.unwrap_or(genesis_hash);
         let mut chain = Chain {
             store,

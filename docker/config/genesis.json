@@ -2,9 +2,17 @@
   "_readme": [
     "CognitiveChain mainnet genesis. EVERY node on the network must use a",
     "byte-identical copy of this file: its hash is part of the P2P handshake.",
-    "BEFORE LAUNCH replace the three placeholder allocation addresses with real",
-    "ones from `cog-node keygen`, and set genesis_time to the launch timestamp",
-    "(unix seconds). After the first block is produced the file can never change.",
+    "",
+    "The allocation addresses below are REAL: their private keys were generated",
+    "with `cog-node keygen` and are held by the project owner. They are NOT",
+    "placeholders and must NOT be reused by anyone forking this repository -",
+    "generate your own with `cog-node keygen` before launching your own network.",
+    "",
+    "STILL TO SET BEFORE LAUNCH: genesis_time, currently 1893456000",
+    "(2030-01-01T00:00:00Z). A node started with a future genesis_time accepts no",
+    "blocks until that moment, which is how a launch is scheduled. Set it to the",
+    "real launch time in unix seconds (`date +%s`).",
+    "",
     "Amounts are in acog; 1 COG = 100000000 acog. Max supply 1000000000 COG:",
     "100000000 premined (10%) + 900000000 emitted to miners (90%)."
   ],
@@ -24,17 +32,17 @@
   "allocations": [
     {
       "label": "founders",
-      "address": "cog0000000000000000000000000000000000000001",
+      "address": "cog523fe4ffffb34e4dd244b2e2cc5a543e812ac802",
       "amount_acog": "5000000000000000"
     },
     {
       "label": "ecosystem",
-      "address": "cog0000000000000000000000000000000000000002",
+      "address": "cogfac8b9ec001fe09c3ef42356b085bfce8ceeba7a",
       "amount_acog": "3000000000000000"
     },
     {
       "label": "liquidity",
-      "address": "cog0000000000000000000000000000000000000003",
+      "address": "cog231925e3b8bbdc093f98f8e7e34a6a5da862dc71",
       "amount_acog": "2000000000000000"
     }
   ]

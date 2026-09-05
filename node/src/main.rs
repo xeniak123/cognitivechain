@@ -330,7 +330,21 @@ fn cmd_inspect_genesis(path: PathBuf) -> Result<()> {
     let cfg = GenesisConfig::load(&path)?;
     cfg.assert_unique_allocations()?;
     let state = state::genesis_state(&cfg)?;
+    let now = chain::now_secs();
+    let when = if cfg.genesis_time > now {
+        format!(
+            "{} (unix) - {} days in the FUTURE; no block can be produced before then",
+            cfg.genesis_time,
+            (cfg.genesis_time - now) / 86_400
+        )
+    } else {
+        format!(
+            "{} (unix) - in the past, the chain may start now",
+            cfg.genesis_time
+        )
+    };
     println!("chain_id          : {}", cfg.chain_id);
+    println!("genesis time      : {when}");
     println!("genesis hash      : {}", hex::encode(cfg.genesis_hash()));
     println!("genesis state root: {}", hex::encode(state.root()));
     println!("max supply        : {} COG", format_cog(cfg.max_supply()?));

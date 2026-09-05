@@ -63,6 +63,11 @@ razy tańsza jest weryfikacja od produkcji dowodu.
 Trzy adresy z pliku genesis dostają premine (łącznie 10% podaży). Wygeneruj je
 **na maszynie offline** i zrób kopie zapasowe — tych kluczy nie da się odzyskać.
 
+> Jeśli forkujesz to repozytorium: adresy w `genesis/genesis.mainnet.json` należą
+> do właściciela projektu i **nie są zaślepkami**. Uruchomienie własnej sieci na
+> tym pliku oznacza podarowanie mu całego premine. Wygeneruj własne trzy adresy
+> i podmień je, zanim cokolwiek uruchomisz.
+
 ```bash
 ./target/release/cog-node keygen --out founders.json
 ./target/release/cog-node keygen --out ecosystem.json
@@ -99,12 +104,20 @@ Sprawdź wynik:
 
 ```
 chain_id          : cognitivechain-1
-genesis hash      : 5694a641ccfacd08...
+genesis time      : 1893456000 (unix) - 1213 days in the FUTURE; no block can be produced before then
+genesis hash      : eac51ff2080d12255b9e220fa156efa4cea893fa4eb502fc5430b239ccdac7e7
 max supply        : 1000000000.00000000 COG
 premine           : 100000000.00000000 COG
 initial reward    : 45.00000000 COG per verified task
 halving every     : 10000000 tasks
 ```
+
+> **`genesis_time` w przyszłości nie jest błędem, tylko harmonogramem.** Blok 1
+> musi mieć znacznik czasu większy od genesis i nie większy od „teraz", więc do
+> nadejścia tej chwili żaden blok nie może powstać. Węzeł wypisuje o tym
+> ostrzeżenie przy każdym starcie. Plik w tym repozytorium ma celowo datę
+> `1893456000` (2030-01-01) — podmień ją na realny moment startu, inaczej sieć
+> po prostu nie ruszy.
 
 **Ekonomia jest zamknięta matematycznie.** Węzeł odmówi startu, jeśli
 harmonogram emisji mógłby przekroczyć twardy limit:
@@ -363,7 +376,10 @@ sieć i tak odrzuci.
 ## Checklista startu mainnetu
 
 - [ ] Klucze alokacji wygenerowane offline, kopie zapasowe w dwóch miejscach.
-- [ ] `genesis.json` z prawdziwymi adresami i `genesis_time` = moment startu.
+- [ ] `genesis.json` z prawdziwymi adresami alokacji.
+- [ ] `genesis_time` ustawiony na moment startu — `inspect-genesis` nie może
+      pokazywać „in the FUTURE", jeśli sieć ma ruszyć od razu.
+- [ ] Klucze prywatne alokacji przeniesione poza maszynę roboczą.
 - [ ] `inspect-genesis` pokazuje poprawną podaż i hash genesis.
 - [ ] Hash genesis opublikowany (strona/README) — użytkownicy muszą móc
       sprawdzić, że łączą się z właściwą siecią.
