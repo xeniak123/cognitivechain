@@ -163,6 +163,13 @@ fn apply_transaction(
     params: &ChainParams,
     fees_collected: &mut u64,
 ) -> Result<()> {
+    if tx.chain_id != params.chain_id {
+        bail!(
+            "transaction is for chain {:?}, this is {:?}",
+            tx.chain_id,
+            params.chain_id
+        );
+    }
     if tx.memo.len() > MAX_MEMO_LEN {
         bail!("memo too long: {} > {MAX_MEMO_LEN}", tx.memo.len());
     }

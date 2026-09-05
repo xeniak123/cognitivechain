@@ -33,7 +33,7 @@ Etykiety domenowe (bajty ASCII, bez terminatora):
 "cog/pow/v1"      preimage proof-of-work
 "cog/chal/v1"     wybór wierszy wyzwania
 "cog/commit/v1"   identyfikator zobowiązania
-"cog/tx/v1"       bajty podpisywane transakcji
+"cog/tx/v2"       bajty podpisywane transakcji
 "cog/header/v1"   preimage nagłówka bloku
 "cog/state/v1"    korzeń stanu
 "cog/reveal/v1"   korzeń payloadu otwarcia
@@ -56,12 +56,18 @@ zapis   = "cog" + hex(address)          # 43 znaki
 Transakcja podpisywana jest nad:
 
 ```
-"cog/tx/v1" ‖ pubkey[32] ‖ to[20] ‖ amount_le64 ‖ fee_le64 ‖ nonce_le64
-            ‖ memo_len_le32 ‖ memo
+"cog/tx/v2" ‖ chain_id_len_le32 ‖ chain_id ‖ pubkey[32] ‖ to[20]
+            ‖ amount_le64 ‖ fee_le64 ‖ nonce_le64 ‖ memo_len_le32 ‖ memo
 ```
 
 Podpis: ed25519 (RFC 8032), 64 bajty. `nonce` musi być równy bieżącemu nonce
 konta; `memo` maksymalnie 256 bajtów; przelew do samego siebie jest odrzucany.
+
+> **`chain_id` wchodzi do podpisu i to nie jest ozdobnik.** Bez niego transakcja
+> podpisana na devnecie byłaby bajt w bajt ważna na mainnecie — a to ten sam
+> portfel, którym testujesz, zanim uruchomisz sieć produkcyjną. Węzeł wstawia
+> własny `chain_id` przy przyjmowaniu transakcji, więc podpis złożony dla innej
+> sieci po prostu nie przechodzi weryfikacji.
 
 ---
 

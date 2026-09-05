@@ -146,6 +146,20 @@ async fn send(
         Err(err) => return fail(StatusCode::BAD_GATEWAY, err),
     };
     let nonce = account.get("nonce").and_then(|v| v.as_u64()).unwrap_or(0);
+
+    // The chain id is part of what gets signed, so it has to come from the node
+    // this wallet is actually talking to.
+    let chain_id = match rpc_call(&ctx.node, "cog_status", json!({})).await {
+        Ok(v) => v
+            .get("chain_id")
+            .and_then(|c| c.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        Err(err) => return fail(StatusCode::BAD_GATEWAY, err),
+    };
+    if chain_id.is_empty() {
+        return fail(StatusCode::BAD_GATEWAY, "węzeł nie podał chain_id");
+    }
     let balance: u64 = account
         .get("balance_acog")
         .and_then(|v| v.as_str())
@@ -169,7 +183,7 @@ async fn send(
 
     let tx = match ctx
         .keypair
-        .sign_transfer(to, amount, fee, nonce, Vec::new())
+        .sign_transfer(&chain_id, to, amount, fee, nonce, Vec::new())
     {
         Ok(tx) => tx,
         Err(err) => return fail(StatusCode::INTERNAL_SERVER_ERROR, err),

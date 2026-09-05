@@ -116,6 +116,8 @@ pub struct PoolState {
     height: u64,
     network_difficulty: u64,
     block_reward: u64,
+    /// Chain id reported by the node; part of what payouts sign over.
+    chain_id: String,
     connected: bool,
 }
 
@@ -166,6 +168,7 @@ impl Pool {
                 height: 0,
                 network_difficulty: u64::MAX,
                 block_reward: 0,
+                chain_id: String::new(),
                 connected: false,
             })),
         })
@@ -747,6 +750,12 @@ pub async fn follow_node(pool: Pool) {
             }
         }
 
+        if let Ok(status) = rpc_call(&pool.config.node, "cog_status", json!({})).await {
+            if let Some(id) = status.get("chain_id").and_then(|c| c.as_str()) {
+                pool.state.lock().chain_id = id.to_string();
+            }
+        }
+
         // Pick up challenges the node is waiting on for our blocks.
         if let Ok(v) = rpc_call(
             &pool.config.node,
@@ -933,6 +942,12 @@ pub async fn pay_miners(pool: Pool, interval: Duration) {
         // nonce for each payout would hand the same value to two transactions,
         // and only one of them could ever be mined - while both miners had
         // already had their credit cleared.
+        let chain_id = pool.state.lock().chain_id.clone();
+        if chain_id.is_empty() {
+            tracing::warn!("chain id still unknown, postponing payouts");
+            continue;
+        }
+
         let mut nonce = match rpc_call(
             &pool.config.node,
             "cog_getBalance",
@@ -958,6 +973,7 @@ pub async fn pay_miners(pool: Pool, interval: Duration) {
             };
 
             let tx = match pool.keypair.sign_transfer(
+                &chain_id,
                 addr,
                 amount,
                 pool.config.payout_fee,

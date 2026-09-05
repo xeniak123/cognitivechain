@@ -117,6 +117,10 @@ mod sig_serde {
 /// A value transfer / fee-bearing transaction.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Transaction {
+    /// Chain this transaction is valid on. Signed over, so a transaction from
+    /// one network can never be replayed on another - which matters because the
+    /// same wallet is routinely used on a devnet and on mainnet.
+    pub chain_id: String,
     /// ed25519 public key of the sender; the sender address is derived from it.
     pub pubkey: [u8; 32],
     pub to: Address,
@@ -139,8 +143,10 @@ impl Transaction {
 
     /// Canonical bytes that are actually signed. Never includes the signature.
     pub fn signing_bytes(&self) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(96 + self.memo.len());
-        buf.extend_from_slice(b"cog/tx/v1");
+        let mut buf = Vec::with_capacity(112 + self.chain_id.len() + self.memo.len());
+        buf.extend_from_slice(b"cog/tx/v2");
+        buf.extend_from_slice(&(self.chain_id.len() as u32).to_le_bytes());
+        buf.extend_from_slice(self.chain_id.as_bytes());
         buf.extend_from_slice(&self.pubkey);
         buf.extend_from_slice(&self.to.0);
         buf.extend_from_slice(&self.amount.to_le_bytes());

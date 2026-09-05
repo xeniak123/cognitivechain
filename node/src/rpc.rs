@@ -303,7 +303,11 @@ fn dispatch(ctx: &RpcContext, method: &str, params: &Value) -> Result<Value> {
                 _ => Vec::new(),
             };
 
+            let mut chain = ctx.chain.lock();
             let tx = Transaction {
+                // Taken from this node, not from the caller: a transaction
+                // signed for another chain simply fails signature verification.
+                chain_id: chain.params.chain_id.clone(),
                 pubkey,
                 to: addr_param(params, "to")?,
                 amount: u64_param(params, "amount")?,
@@ -312,7 +316,6 @@ fn dispatch(ctx: &RpcContext, method: &str, params: &Value) -> Result<Value> {
                 memo,
                 signature,
             };
-            let mut chain = ctx.chain.lock();
             let state = chain.state.clone();
             let chain_params = chain.params.clone();
             let hash = chain.mempool.insert(tx, &state, &chain_params)?;

@@ -383,13 +383,21 @@ async fn cmd_send(
     let amount = parse_cog(&amount).map_err(|e| anyhow!(e))?;
     let fee = parse_cog(&fee).map_err(|e| anyhow!(e))?;
 
+    // The chain id is signed over, so take it from the node being paid.
+    let status = rpc_call(&rpc, "cog_status", json!({})).await?;
+    let chain_id = status
+        .get("chain_id")
+        .and_then(|c| c.as_str())
+        .ok_or_else(|| anyhow!("node did not report a chain_id"))?
+        .to_string();
+
     let info = rpc_call(&rpc, "cog_getBalance", json!({"address": kp.address})).await?;
     let nonce = info
         .get("nonce")
         .and_then(|v| v.as_u64())
         .ok_or_else(|| anyhow!("node did not return a nonce"))?;
 
-    let tx = kp.sign_transfer(to, amount, fee, nonce, Vec::new())?;
+    let tx = kp.sign_transfer(&chain_id, to, amount, fee, nonce, Vec::new())?;
     let result = rpc_call(
         &rpc,
         "cog_sendTransaction",
@@ -405,7 +413,7 @@ async fn cmd_send(
     )
     .await?;
     println!(
-        "sent {} COG to {} (fee {} COG, nonce {})",
+        "sent {} COG on {chain_id} to {} (fee {} COG, nonce {})",
         format_cog(amount),
         to,
         format_cog(fee),

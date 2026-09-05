@@ -60,6 +60,7 @@ impl Keypair {
     /// Build and sign a transfer transaction.
     pub fn sign_transfer(
         &self,
+        chain_id: &str,
         to: Address,
         amount: u64,
         fee: u64,
@@ -68,6 +69,7 @@ impl Keypair {
     ) -> Result<Transaction> {
         let sk = self.signing_key()?;
         let mut tx = Transaction {
+            chain_id: chain_id.to_string(),
             pubkey: self.public_bytes()?,
             to,
             amount,
@@ -98,17 +100,44 @@ mod tests {
     fn sign_and_verify() {
         let kp = Keypair::generate();
         let tx = kp
-            .sign_transfer(Address([1u8; 20]), 500, 1, 0, b"hello".to_vec())
+            .sign_transfer(
+                "test-chain",
+                Address([1u8; 20]),
+                500,
+                1,
+                0,
+                b"hello".to_vec(),
+            )
             .unwrap();
         verify_transaction(&tx).unwrap();
         assert_eq!(tx.from(), kp.address().unwrap());
     }
 
     #[test]
+    fn a_transaction_from_another_chain_is_invalid() {
+        let kp = Keypair::generate();
+        let mut tx = kp
+            .sign_transfer(
+                "cognitivechain-devnet",
+                Address([2u8; 20]),
+                100,
+                1,
+                0,
+                vec![],
+            )
+            .unwrap();
+        verify_transaction(&tx).unwrap();
+        // Replaying it on a different network must fail, not merely be rejected
+        // by policy: the chain id is inside the signed bytes.
+        tx.chain_id = "cognitivechain-1".into();
+        assert!(verify_transaction(&tx).is_err());
+    }
+
+    #[test]
     fn tampered_amount_fails() {
         let kp = Keypair::generate();
         let mut tx = kp
-            .sign_transfer(Address([1u8; 20]), 500, 1, 0, vec![])
+            .sign_transfer("test-chain", Address([1u8; 20]), 500, 1, 0, vec![])
             .unwrap();
         tx.amount = 501;
         assert!(verify_transaction(&tx).is_err());

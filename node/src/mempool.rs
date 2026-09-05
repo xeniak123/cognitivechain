@@ -36,6 +36,13 @@ impl Mempool {
         if self.txs.len() >= MAX_POOL_SIZE {
             bail!("mempool is full ({MAX_POOL_SIZE} transactions)");
         }
+        if tx.chain_id != params.chain_id {
+            bail!(
+                "transaction is for chain {:?}, this node runs {:?}",
+                tx.chain_id,
+                params.chain_id
+            );
+        }
         if tx.memo.len() > MAX_MEMO_LEN {
             bail!("memo too long: {} > {MAX_MEMO_LEN}", tx.memo.len());
         }
