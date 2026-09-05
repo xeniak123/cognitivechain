@@ -48,7 +48,7 @@ jobs:
         working-directory: node
         run: |
           cargo test --release
-          cargo run --release -- selftest
+          cargo run --release --bin cog-node -- selftest
 
       - name: Build miner executable
         working-directory: miner

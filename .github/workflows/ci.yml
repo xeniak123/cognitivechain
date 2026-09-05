@@ -43,7 +43,7 @@ jobs:
 
       - name: Proof-of-Useful-Work selftest
         working-directory: node
-        run: cargo run --release -- selftest
+        run: cargo run --release --bin cog-node -- selftest
 
   miner:
     name: miner (${{ matrix.os }}, py${{ matrix.python }})
@@ -94,7 +94,7 @@ jobs:
       - name: Compare protocol test vectors
         run: |
           cd node
-          cargo run --release -- selftest | tee ../rust.txt
+          cargo run --release --bin cog-node -- selftest | tee ../rust.txt
           cd ../miner
           python - <<'EOF' | tee ../python.txt
           from cog_miner import protocol as pr

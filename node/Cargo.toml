@@ -2,6 +2,7 @@
 name = "cog-node"
 version = "1.0.0"
 edition = "2021"
+default-run = "cog-node"
 description = "CognitiveChain (COG) Layer-1 node: Proof-of-Useful-Work over verifiable tensor computation"
 license = "Apache-2.0"
 
