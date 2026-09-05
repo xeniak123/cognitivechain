@@ -42,7 +42,7 @@ jest opcjonalna — bez niej koparka działa na CPU, tylko wolniej.
 ### 1.1 Zbuduj narzędzia
 
 ```bash
-git clone <adres-twojego-repo> cognitivechain
+git clone https://github.com/xeniak123/cognitivechain.git cognitivechain
 cd cognitivechain/node
 cargo build --release
 ```
@@ -154,7 +154,7 @@ systemctl enable --now docker
 ### 2.2 Wgraj kod i genesis
 
 ```bash
-git clone <adres-twojego-repo> /opt/cognitivechain
+git clone https://github.com/xeniak123/cognitivechain.git /opt/cognitivechain
 cd /opt/cognitivechain
 cp genesis/genesis.mainnet.json docker/config/genesis.json
 ```

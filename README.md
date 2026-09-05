@@ -1,5 +1,8 @@
 # CognitiveChain (COG)
 
+[![CI](https://github.com/xeniak123/cognitivechain/actions/workflows/ci.yml/badge.svg)](https://github.com/xeniak123/cognitivechain/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 Warstwa 1 zabezpieczona **użyteczną pracą obliczeniową**: zamiast pustego
 haszowania górnicy wykonują gęste mnożenie macierzy w ciele skończonym — tę samą
 operację, która stanowi rdzeń inferencji sieci neuronowych — a sieć potrafi to
@@ -50,6 +53,10 @@ docker/         Dockerfile + docker-compose
 ## Szybki start (lokalny devnet)
 
 ```bash
+# 0. Sklonuj
+git clone https://github.com/xeniak123/cognitivechain.git
+cd cognitivechain
+
 # 1. Zbuduj węzeł
 cd node && cargo build --release && cd ..
 
