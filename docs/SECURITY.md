@@ -48,9 +48,10 @@ politykę można obejść, łącząc się z węzłem bezpośrednio.
 
 ---
 
-## 2. Znane problemy otwarte
+## 2. Znane problemy
 
-Nienaprawione, świadomie. Kolejność według tego, co zrobiłbym najpierw.
+Kolejność według tego, co zrobiłbym najpierw. Pozycje przekreślone zostały
+naprawione po pierwszym spisaniu tej listy.
 
 ### ~~ŚREDNIE/WYSOKIE — reorganizacja odtwarza łańcuch od genesis~~ — naprawione
 `chain.rs`, `rebuild_state_to`
