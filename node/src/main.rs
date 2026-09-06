@@ -117,6 +117,9 @@ enum Command {
         /// port can spend the wallet, so put authentication in front of it.
         #[arg(long)]
         allow_remote: bool,
+        /// Do not open a browser; just print the address.
+        #[arg(long)]
+        no_open: bool,
     },
     /// Validate a genesis file and print the derived constants.
     InspectGenesis {
@@ -500,6 +503,7 @@ async fn main() -> Result<()> {
             bind,
             rpc,
             allow_remote,
+            no_open,
         } => {
             let keypair = load_key(&key)?;
             println!("portfel: {}", keypair.address);
@@ -510,6 +514,7 @@ async fn main() -> Result<()> {
                 },
                 bind,
                 allow_remote,
+                !no_open,
             )
             .await
         }

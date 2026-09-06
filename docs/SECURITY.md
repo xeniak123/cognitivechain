@@ -52,20 +52,23 @@ politykę można obejść, łącząc się z węzłem bezpośrednio.
 
 Nienaprawione, świadomie. Kolejność według tego, co zrobiłbym najpierw.
 
-### ŚREDNIE/WYSOKIE — reorganizacja odtwarza łańcuch od genesis
-`chain.rs`, `accept_block` i `rebuild_state_to`
+### ~~ŚREDNIE/WYSOKIE — reorganizacja odtwarza łańcuch od genesis~~ — naprawione
+`chain.rs`, `rebuild_state_to`
 
-Blok trafiający na gałąź boczną powoduje odtworzenie **całej** gałęzi od bloku
-zerowego, żeby zbudować stan do walidacji. Koszt rośnie liniowo z długością
-łańcucha. Peer może wysyłać kolejne poprawne bloki na tanią gałąź boczną i za
-każdym razem wymusić pełne odtworzenie.
+Odtwarzanie zaczynało się od bloku zerowego, więc koszt rósł liniowo z długością
+łańcucha. Uderzało to dwa razy: przy **każdym starcie węzła** (35 s przy 2 351
+blokach devnetu, minuty po miesiącu mainnetu) oraz przy reorganizacji, gdzie peer
+mógł wymuszać pełne odtworzenie kolejnymi blokami na taniej gałęzi bocznej.
 
-Przy wysokości 1 000 bloków to niezauważalne. Przy 100 000 — jeden pakiet
-kosztuje węzeł sekundy pracy CPU. **To jest wektor DoS, który dojrzewa razem
-z siecią.**
+Węzeł zapisuje teraz post-stan co `SNAPSHOT_INTERVAL` bloków i cofa się tylko do
+najbliższej migawki. Start po migawce: **35 s → 0 s**, identyczny korzeń stanu.
+Migawki są kluczowane hashem bloku, więc reorganizacja startuje od wspólnego
+przodka, a nie od genesis. Test `a_restart_reproduces_the_state_without_replaying_everything`.
 
-Rozwiązanie: okresowe migawki stanu i cofanie tylko do najbliższego wspólnego
-przodka zamiast do genesis.
+Pozostaje ograniczenie: gałąź boczna rozjeżdżająca się głębiej niż
+`SNAPSHOT_RETENTION` bloków nadal wymaga pełnego odtworzenia. Przy retencji 1 000
+bloków i 30-sekundowym bloku to ponad 8 godzin historii — poza zasięgiem
+realistycznej reorganizacji, ale wciąż warte przemyślenia.
 
 ### ŚREDNIE — okno otwarcia zobowiązania wynosi dokładnie jeden blok
 `pouw.rs`, `REVEAL_WINDOW = 1`

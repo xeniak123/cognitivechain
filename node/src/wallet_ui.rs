@@ -35,7 +35,29 @@ pub struct WalletContext {
     pub node: String,
 }
 
-pub async fn serve(ctx: WalletContext, bind: SocketAddr, allow_remote: bool) -> Result<()> {
+/// Open the system browser at `url`. Best effort: a wallet that could not
+/// launch a browser is still a working wallet, so failure is never fatal.
+fn open_browser(url: &str) {
+    let result = if cfg!(target_os = "windows") {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", url])
+            .spawn()
+    } else if cfg!(target_os = "macos") {
+        std::process::Command::new("open").arg(url).spawn()
+    } else {
+        std::process::Command::new("xdg-open").arg(url).spawn()
+    };
+    if let Err(err) = result {
+        tracing::debug!("could not open a browser automatically: {err}");
+    }
+}
+
+pub async fn serve(
+    ctx: WalletContext,
+    bind: SocketAddr,
+    allow_remote: bool,
+    open: bool,
+) -> Result<()> {
     if !bind.ip().is_loopback() && !allow_remote {
         bail!(
             "refusing to bind the wallet to {bind}: anything that reaches this port can spend \
@@ -59,10 +81,17 @@ pub async fn serve(ctx: WalletContext, bind: SocketAddr, allow_remote: bool) -> 
     let listener = tokio::net::TcpListener::bind(bind)
         .await
         .with_context(|| format!("cannot bind wallet UI on {bind}"))?;
+    let url = format!("http://{bind}");
     println!();
     println!("  Portfel CognitiveChain");
-    println!("  otwórz w przeglądarce:  http://{bind}");
+    println!("  {url}");
     println!();
+    if open {
+        println!("  Otwieram przeglądarkę...");
+        open_browser(&url);
+    } else {
+        println!("  Otwórz ten adres w przeglądarce.");
+    }
     println!("  Zatrzymanie: Ctrl+C");
     println!();
     axum::serve(listener, app).await?;

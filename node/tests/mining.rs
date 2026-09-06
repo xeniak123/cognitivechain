@@ -61,6 +61,9 @@ fn test_genesis(miner: Address) -> GenesisConfig {
 /// Merkle leaves over them.
 type SolvedTask = (Solution, Vec<Vec<u16>>, Vec<[u8; 32]>);
 
+/// A commitment id plus the rows and leaves needed to open it in the next block.
+type Unopened = ([u8; 32], Vec<Vec<u16>>, Vec<[u8; 32]>);
+
 fn solve(prev_hash: [u8; 32], miner: Address, difficulty: u64) -> SolvedTask {
     for salt in 0u64..1024 {
         let seed = pouw::task_seed(&prev_hash, &miner, salt);
@@ -320,8 +323,6 @@ fn the_chain_survives_its_retarget_boundaries() {
     cfg.params.target_block_time_secs = 10;
     let mut chain = Chain::open(&dir.0, cfg).unwrap();
 
-    // commitment id plus the rows and leaves needed to open it next block
-    type Unopened = ([u8; 32], Vec<Vec<u16>>, Vec<[u8; 32]>);
     let mut pending: Option<Unopened> = None;
 
     for expected_height in 1..=9u64 {
@@ -361,6 +362,56 @@ fn the_chain_survives_its_retarget_boundaries() {
         "difficulty should have retargeted upward, still {}",
         chain.tip.header.difficulty
     );
+}
+
+/// Restarting a node must reproduce exactly the state it had, and must not
+/// re-execute the whole chain to get there.
+///
+/// Before state snapshots existed, every start replayed every block and
+/// re-verified every proof: 35 seconds at 2,351 blocks on a devnet, and minutes
+/// once a mainnet had run for a month. A node that takes minutes to answer is
+/// indistinguishable from a broken one - the wallet and the miner both just see
+/// a refused connection.
+#[test]
+fn a_restart_reproduces_the_state_without_replaying_everything() {
+    let miner = Address([0x4a; 20]);
+    let dir = TempDir::new("restart");
+    let cfg = test_genesis(miner);
+
+    let (height, root, minted, tasks) = {
+        let mut chain = Chain::open(&dir.0, cfg.clone()).unwrap();
+        let mut pending: Option<Unopened> = None;
+
+        for _ in 0..4u64 {
+            let difficulty = chain.expected_difficulty(&chain.tip).unwrap();
+            let prev = chain.tip_hash;
+            let (sol, rows, leaves) = solve(prev, miner, difficulty);
+            let seed = pouw::task_seed(&prev, &miner, sol.salt);
+            let commit = pouw::commit_id(&seed, &sol.matmul_root, sol.nonce);
+            if let Some((id, prev_rows, prev_leaves)) = pending.take() {
+                chain
+                    .submit_reveal(build_reveal(id, prev, &prev_rows, &prev_leaves))
+                    .expect("reveal must be accepted");
+            }
+            chain.submit_solution(sol).unwrap();
+            pending = Some((commit, rows, leaves));
+        }
+
+        (
+            chain.tip.header.height,
+            chain.state.root(),
+            chain.state.minted,
+            chain.state.tasks_completed,
+        )
+    };
+
+    // Reopen the same database with a fresh Chain, exactly as a restart does.
+    let reopened = Chain::open(&dir.0, cfg).unwrap();
+    assert_eq!(reopened.tip.header.height, height, "height must survive");
+    assert_eq!(reopened.state.root(), root, "state root must be identical");
+    assert_eq!(reopened.state.minted, minted, "supply must be identical");
+    assert_eq!(reopened.state.tasks_completed, tasks);
+    assert_eq!(reopened.tip_hash, reopened.tip.hash());
 }
 
 #[test]

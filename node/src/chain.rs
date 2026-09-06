@@ -13,6 +13,13 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// How often the post-state of a block is written to disk. A restart replays at
+/// most this many blocks, and a reorganisation rewinds to at most this depth
+/// before it finds a state it can start from.
+const SNAPSHOT_INTERVAL: u64 = 100;
+/// Snapshots older than this many blocks behind the tip are pruned.
+const SNAPSHOT_RETENTION: u64 = 1_000;
+
 pub fn now_secs() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -156,30 +163,96 @@ impl Chain {
         Ok(chain)
     }
 
-    /// Replay the branch ending at `hash` from genesis and adopt it as the tip.
+    /// Adopt `hash` as the tip, rebuilding the state to match it.
+    ///
+    /// Walks back only as far as the nearest block whose post-state was saved,
+    /// then replays forward from there. Without this a node re-executed - and
+    /// re-verified every proof in - the entire chain on every single start,
+    /// which is seconds at a few thousand blocks and minutes at a few hundred
+    /// thousand. It is also what keeps a reorganisation from costing a full
+    /// replay from genesis.
     fn rebuild_state_to(&mut self, hash: &Hash) -> Result<()> {
-        let branch = self.branch_to(hash)?;
-        let mut state = genesis_state(&self.genesis_cfg)?;
-        let mut work: u128 = 0;
-        for block in branch.iter().skip(1) {
-            apply_block(&mut state, block, &self.params)?;
-            work += block.header.difficulty as u128;
+        let genesis_hash = self.genesis_hash()?;
+
+        // Collect blocks back to the nearest usable state, newest first.
+        let mut suffix: Vec<Block> = Vec::new();
+        let mut cursor = *hash;
+        let mut base: Option<State> = None;
+
+        loop {
+            if let Some(raw) = self.store.get_state(&cursor)? {
+                match bincode::deserialize::<State>(&raw) {
+                    Ok(state) => {
+                        base = Some(state);
+                        break;
+                    }
+                    // A snapshot written by an older build is not a reason to
+                    // fail; fall through and replay instead.
+                    Err(err) => {
+                        tracing::warn!("ignoring an unreadable state snapshot: {err}");
+                    }
+                }
+            }
+            let block = self.store.get_block(&cursor)?.with_context(|| {
+                format!("missing block {} while walking back", hex::encode(cursor))
+            })?;
+            let prev = block.header.prev_hash;
+            let is_genesis = cursor == genesis_hash;
+            suffix.push(block);
+            if is_genesis {
+                break;
+            }
+            cursor = prev;
         }
-        let tip = branch
-            .last()
-            .cloned()
-            .context("branch unexpectedly empty")?;
-        self.store.truncate_canonical_above(0)?;
-        for block in &branch {
+
+        let mut state = match base {
+            Some(state) => state,
+            None => genesis_state(&self.genesis_cfg)?,
+        };
+
+        suffix.reverse();
+        if !suffix.is_empty() {
+            tracing::info!("replaying {} blocks to reach the tip", suffix.len());
+        }
+        for block in &suffix {
+            // The genesis block carries no solution and no transactions; its
+            // post-state is what `genesis_state` already produced.
+            if block.header.height == 0 {
+                continue;
+            }
+            apply_block(&mut state, block, &self.params)?;
+        }
+
+        let tip = self
+            .store
+            .get_block(hash)?
+            .context("tip block vanished from the store")?;
+
+        // The canonical index is rewritten only for what was replayed; anything
+        // above the new tip belonged to a branch we just left.
+        for block in &suffix {
             self.store
                 .set_canonical(block.header.height, &block.hash())?;
         }
+        self.store.truncate_canonical_above(tip.header.height)?;
         self.store.set_tip(hash)?;
-        self.store.flush()?;
+
+        self.tip_work = self.store.cumulative_work(hash)?.unwrap_or(0);
         self.tip_hash = *hash;
         self.tip = tip;
-        self.tip_work = work;
         self.state = state;
+        self.save_snapshot()?;
+        self.store.flush()?;
+        Ok(())
+    }
+
+    /// Persist the current tip's post-state.
+    fn save_snapshot(&self) -> Result<()> {
+        let encoded = bincode::serialize(&self.state)?;
+        self.store
+            .put_state(&self.tip_hash, self.tip.header.height, &encoded)?;
+        self.store
+            .prune_states(self.tip.header.height.saturating_sub(SNAPSHOT_RETENTION))?;
         Ok(())
     }
 
@@ -351,6 +424,9 @@ impl Chain {
             self.tip = block;
             self.tip_hash = hash;
             self.tip_work = work;
+            if self.tip.header.height.is_multiple_of(SNAPSHOT_INTERVAL) {
+                self.save_snapshot()?;
+            }
             return Ok(Accepted::Extended {
                 hash,
                 height: self.tip.header.height,

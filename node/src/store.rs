@@ -1,7 +1,7 @@
 //! Durable block storage on top of sled.
 
 use crate::types::{Block, Hash};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use std::path::Path;
 
 pub struct Store {
@@ -10,6 +10,10 @@ pub struct Store {
     by_height: sled::Tree,
     work: sled::Tree,
     meta: sled::Tree,
+    /// Post-state of selected blocks, so a restart does not have to re-execute
+    /// the whole chain. Keyed by block hash, which makes a snapshot usable from
+    /// any branch that contains that block.
+    states: sled::Tree,
 }
 
 const TIP_KEY: &[u8] = b"tip";
@@ -18,13 +22,28 @@ const CHAIN_ID_KEY: &[u8] = b"chain_id";
 
 impl Store {
     pub fn open(path: &Path) -> Result<Self> {
-        let db = sled::open(path)
-            .with_context(|| format!("cannot open database at {}", path.display()))?;
+        let db = sled::open(path).map_err(|err| {
+            // The raw error here is "could not acquire lock on ...", which tells
+            // a user nothing about what to do. This is the single most likely
+            // thing to go wrong when someone restarts a node, so say it plainly.
+            let text = err.to_string();
+            if text.contains("lock") {
+                anyhow!(
+                    "another cog-node is already using {}.
+
+                     A data directory can only be opened by one node at a time.                      Close the other node and try again - if you just closed it,                      give it a few seconds to release the database. To run a                      second node, point it at a different --data-dir.",
+                    path.display()
+                )
+            } else {
+                anyhow!("cannot open database at {}: {text}", path.display())
+            }
+        })?;
         Ok(Store {
             blocks: db.open_tree("blocks")?,
             by_height: db.open_tree("by_height")?,
             work: db.open_tree("work")?,
             meta: db.open_tree("meta")?,
+            states: db.open_tree("states")?,
             db,
         })
     }
@@ -65,6 +84,47 @@ impl Store {
             }
             None => Ok(None),
         }
+    }
+
+    /// Save the post-state of the block `hash`, tagged with its height so old
+    /// snapshots can be pruned.
+    pub fn put_state(&self, hash: &Hash, height: u64, state: &[u8]) -> Result<()> {
+        let mut value = Vec::with_capacity(8 + state.len());
+        value.extend_from_slice(&height.to_be_bytes());
+        value.extend_from_slice(state);
+        self.states.insert(hash, value)?;
+        Ok(())
+    }
+
+    /// The stored post-state of `hash`, if one was kept.
+    pub fn get_state(&self, hash: &Hash) -> Result<Option<Vec<u8>>> {
+        match self.states.get(hash)? {
+            Some(raw) if raw.len() > 8 => Ok(Some(raw[8..].to_vec())),
+            Some(_) => Err(anyhow!("corrupt state snapshot")),
+            None => Ok(None),
+        }
+    }
+
+    /// Drop snapshots older than `keep_below`, so the store does not grow
+    /// without bound. Recent snapshots are what a reorganisation needs.
+    pub fn prune_states(&self, keep_below: u64) -> Result<()> {
+        let mut stale = Vec::new();
+        for item in self.states.iter() {
+            let (key, value) = item?;
+            if value.len() < 8 {
+                stale.push(key);
+                continue;
+            }
+            let mut b = [0u8; 8];
+            b.copy_from_slice(&value[..8]);
+            if u64::from_be_bytes(b) < keep_below {
+                stale.push(key);
+            }
+        }
+        for key in stale {
+            self.states.remove(key)?;
+        }
+        Ok(())
     }
 
     /// Record `hash` as the canonical block at `height`.
